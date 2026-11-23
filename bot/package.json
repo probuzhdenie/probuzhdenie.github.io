@@ -1,0 +1,14 @@
+{
+  "name": "esvetvisit-issue-bot",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "poll": "node poll.js",
+    "test": "node --test"
+  }
+}
