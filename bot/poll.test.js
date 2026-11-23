@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ISSUE_IMAGE_PATH, ISSUE_JSON_PATH } from './issue.js';
+import { ISSUE_PDF_PATH } from './issue.js';
 import { runPoll } from './poll.js';
 
 const TOKEN = 'tg-poll-token';
@@ -51,7 +51,7 @@ function telegramFetch(updates, sent) {
         ok: true,
         status: 200,
         async arrayBuffer() {
-          return Uint8Array.from([1, 2, 3]).buffer;
+          return Buffer.from('%PDF-1.4\n');
         },
       };
     }
@@ -59,7 +59,7 @@ function telegramFetch(updates, sent) {
   };
 }
 
-test('a complete message writes the issue and advances the offset', async () => {
+test('a pdf message writes the newspaper and advances the offset', async () => {
   const files = new Map();
   const sent = [];
   const result = await runPoll({
@@ -72,8 +72,12 @@ test('a complete message writes the issue and advances the offset', async () => 
         update_id: 10,
         message: {
           chat: { id: 5 },
-          caption: TEXT,
-          photo: [{ file_id: 'big', file_size: 3 }],
+          document: {
+            file_id: 'issue-pdf',
+            file_name: 'issue.pdf',
+            mime_type: 'application/pdf',
+            file_size: 9,
+          },
         },
       },
     ], sent),
@@ -82,17 +86,12 @@ test('a complete message writes the issue and advances the offset', async () => 
 
   assert.equal(result.status, 'published');
   assert.equal(result.state.offset, 11);
-  const doc = JSON.parse(files.get(ISSUE_JSON_PATH));
-  assert.equal(doc.headline, 'Христос воскресе');
-  assert.equal(doc.theme, 'Пасха');
-  assert.equal(doc.text, 'Первая строка');
-  assert.equal(doc.updatedAt, '2026-11-23T12:00:00.000Z');
-  assert.equal(files.has(ISSUE_IMAGE_PATH), true);
+  assert.equal(files.get(ISSUE_PDF_PATH).startsWith('%PDF-'), true);
   assert.match(sent[0], /Выпуск записан/);
   assert.equal(sent[0].includes(TOKEN), false);
 });
 
-test('text and a later photo meet across two polls', async () => {
+test('a text message does not publish across polls', async () => {
   const sent = [];
   let state = { offset: 4, pending: [] };
   const files = new Map();
@@ -112,26 +111,8 @@ test('text and a later photo meet across two polls', async () => {
     log: { error() {}, info() {} },
   });
   assert.equal(first.status, 'state');
-  assert.equal(first.state.pending.length, 1);
-  assert.equal(files.has(ISSUE_JSON_PATH), false);
-
-  const second = await runPoll({
-    config,
-    now: () => WHEN + 60_000,
-    readState: () => state,
-    writeFile,
-    fetchImpl: telegramFetch([
-      {
-        update_id: 5,
-        message: { chat: { id: 5 }, photo: [{ file_id: 'big', file_size: 3 }] },
-      },
-    ], sent),
-    log: { error() {}, info() {} },
-  });
-  assert.equal(second.status, 'published');
-  assert.equal(JSON.parse(files.get(ISSUE_JSON_PATH)).headline, 'Христос воскресе');
-  assert.equal(second.state.pending.length, 0);
-  assert.equal(second.state.offset, 6);
+  assert.equal(files.has(ISSUE_PDF_PATH), false);
+  assert.equal(first.state.offset, 5);
 });
 
 test('an empty queue does not write files', async () => {

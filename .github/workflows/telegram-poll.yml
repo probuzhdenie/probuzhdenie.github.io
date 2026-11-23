@@ -2,7 +2,7 @@ name: Check Telegram for a newspaper issue
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -32,6 +32,7 @@ jobs:
         id: result
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_EDITOR_CODE: ${{ secrets.TELEGRAM_EDITOR_CODE }}
           TELEGRAM_ALLOWED_CHAT_IDS: ${{ vars.TELEGRAM_ALLOWED_CHAT_IDS }}
           PHOTO_WAIT_MS: "1800000"
         run: |

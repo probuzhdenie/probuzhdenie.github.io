@@ -1,3 +1,4 @@
+export const ISSUE_PDF_PATH = 'public/data/issue.pdf';
 export const ISSUE_JSON_PATH = 'public/data/issue.json';
 export const ISSUE_IMAGE_PATH = 'public/data/issue.jpg';
 export const ISSUE_IMAGE_PUBLIC_PATH = 'data/issue.jpg';

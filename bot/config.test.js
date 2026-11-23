@@ -13,6 +13,7 @@ test('defaults repo, branch, wait, and an open allowlist', () => {
   assert.equal(config.branch, 'main');
   assert.equal(config.waitMs, 180_000);
   assert.equal(config.allowlist, null);
+  assert.equal(config.editorCode, '');
 });
 
 test('parses allowlist and optional overrides', () => {

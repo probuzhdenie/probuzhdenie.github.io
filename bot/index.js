@@ -1,25 +1,30 @@
+import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, redactSecrets } from './config.js';
 import { createGithub } from './github.js';
-import {
-  ISSUE_IMAGE_PATH,
-  ISSUE_JSON_PATH,
-  buildIssueDocument,
-  createInbox,
-  missingLabels,
-  parseIssue,
-} from './issue.js';
+import { ISSUE_PDF_PATH, createInbox } from './issue.js';
 import { downloadPhoto, getUpdates, sendMessage } from './telegram.js';
 
-const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
+
+const MAX_CODE_ATTEMPTS = 8;
 
 export function createApp({ config, github, send, download, now = () => Date.now(), log = console }) {
   const inbox = createInbox({ waitMs: config.waitMs, now });
   const timers = new Map();
+  const editors = new Set();
+  const denials = new Map();
 
   function redact(value) {
-    return redactSecrets(value, [config.token, config.githubToken]);
+    return redactSecrets(value, [config.token, config.githubToken, config.editorCode]);
+  }
+
+  function isEditor(chatId) {
+    const key = String(chatId);
+    if (editors.has(key)) return true;
+    if (!config.editorCode) return isAllowed(config, chatId);
+    return Boolean(config.allowlist?.has(key));
   }
 
   function clearTimer(chatId) {
@@ -66,99 +71,94 @@ export function createApp({ config, github, send, download, now = () => Date.now
       return;
     }
 
+    if (config.editorCode && !isEditor(chatId)) {
+      await answerAccess(chatId, text);
+      return;
+    }
+
     if (!isAllowed(config, chatId)) {
       const interesting = command === '/start'
         || command === '/help'
-        || Boolean(message.photo)
-        || parseIssue(text).recognized;
+        || Boolean(message.document);
       if (interesting) await send(chatId, 'Этот чат не может публиковать выпуск.');
       return;
     }
 
     if (command === '/start' || command === '/help') {
-      await send(chatId, helpText(config.waitMs));
+      await send(chatId, helpText());
       return;
     }
 
-    const photo = largestPhoto(message);
-    if (!photo && message.document) {
-      if (parseIssue(text).recognized || inbox.hasPending(chatId)) {
-        await send(chatId, 'Пришлите снимок как фото, не как файл.');
-      }
+    const file = pdfDocument(message);
+    if (message.document && !file) {
+      await send(chatId, 'Пришлите выпуск файлом PDF.');
+      return;
+    }
+    if (!file) return;
+
+    if (file.file_size > MAX_PDF_BYTES) {
+      await send(chatId, 'PDF больше 20 МБ. Пришлите файл меньшего размера.');
       return;
     }
 
-    if (photo?.file_size > MAX_PHOTO_BYTES) {
-      await send(chatId, 'Фото больше 20 МБ. Пришлите снимок меньшего размера.');
-      return;
-    }
-
-    // Decide before downloading. A slow download must not expire the text.
-    const result = inbox.accept({ chatId, text, hasPhoto: Boolean(photo) });
-
-    if (result.action === 'ignore') return;
-
-    if (result.action === 'wait_photo') {
-      armTimer(chatId);
-      await send(chatId, `Текст принят. Пришлите одно фото следующим сообщением в течение ${waitPhrase(config.waitMs)}.`);
-      return;
-    }
-
-    if (result.action === 'reject') {
-      await send(chatId, rejectText(result));
-      return;
-    }
-
-    clearTimer(chatId);
-
-    let photoBytes;
+    let pdfBytes;
     try {
-      photoBytes = Buffer.from(await download(photo.file_id));
+      pdfBytes = Buffer.from(await download(file.file_id));
     } catch (err) {
-      keepPending(chatId, result);
-      await send(chatId, `Не удалось скачать фото: ${redact(err)}`);
+      await send(chatId, `Не удалось скачать PDF: ${redact(err)}`);
       return;
     }
-    if (photoBytes.length === 0) {
-      keepPending(chatId, result);
-      await send(chatId, 'Файл фото пустой.');
+    if (pdfBytes.length === 0) {
+      await send(chatId, 'Файл PDF пустой.');
       return;
     }
-    if (photoBytes.length > MAX_PHOTO_BYTES) {
-      keepPending(chatId, result);
-      await send(chatId, 'Фото больше 20 МБ. Пришлите снимок меньшего размера.');
+    if (pdfBytes.length > MAX_PDF_BYTES) {
+      await send(chatId, 'PDF больше 20 МБ. Пришлите файл меньшего размера.');
+      return;
+    }
+    if (!isPdf(pdfBytes)) {
+      await send(chatId, 'Это не PDF. Пришлите выпуск файлом PDF.');
       return;
     }
 
-    await publish(chatId, result.issue, photoBytes);
+    await publish(chatId, pdfBytes);
   }
 
-  async function publish(chatId, issue, photoBytes) {
-    let photoUrl = null;
+  async function publish(chatId, pdfBytes) {
     try {
-      const photoResult = await github.putFile({
-        path: ISSUE_IMAGE_PATH,
-        bytes: photoBytes,
-        message: 'Publish issue photo',
+      const result = await github.putFile({
+        path: ISSUE_PDF_PATH,
+        bytes: pdfBytes,
+        message: 'Publish newspaper PDF',
       });
-      photoUrl = photoResult.commitUrl;
-      const updatedAt = new Date(now()).toISOString();
-      const document = buildIssueDocument(issue, updatedAt);
-      const jsonResult = await github.putFile({
-        path: ISSUE_JSON_PATH,
-        bytes: `${JSON.stringify(document, null, 2)}\n`,
-        message: commitSubject(issue.headline),
-      });
-      log.info?.(`Published issue for chat ${chatId}: ${jsonResult.commitUrl || 'workspace'}`);
+      log.info?.(`Published PDF for chat ${chatId}: ${result.commitUrl || 'workspace'}`);
       const lines = ['Выпуск записан. Сайт обновится в течение нескольких минут.'];
-      if (jsonResult.commitUrl) lines.push(`Текст: ${jsonResult.commitUrl}`);
-      if (photoUrl) lines.push(`Фото: ${photoUrl}`);
+      if (result.commitUrl) lines.push(result.commitUrl);
       await send(chatId, lines.join('\n'));
     } catch (err) {
       log.error(redact(err));
-      const photoNote = photoUrl ? `\nФото уже записано: ${photoUrl}` : '';
-      await send(chatId, `Не удалось записать выпуск: ${redact(err)}${photoNote}`);
+      await send(chatId, `Не удалось записать выпуск: ${redact(err)}`);
     }
+  }
+
+  async function answerAccess(chatId, text) {
+    const key = String(chatId);
+    const fails = denials.get(key) || 0;
+    if (fails >= MAX_CODE_ATTEMPTS) {
+      await send(chatId, 'Слишком много неверных попыток.');
+      return;
+    }
+    const attempt = String(text || '').trim();
+    if (attempt && safeEqual(attempt, config.editorCode)) {
+      editors.add(key);
+      denials.delete(key);
+      await send(chatId, `Доступ открыт.\n\n${helpText()}`);
+      return;
+    }
+    if (attempt) denials.set(key, fails + 1);
+    await send(chatId, attempt && fails + 1 >= MAX_CODE_ATTEMPTS
+      ? 'Слишком много неверных попыток.'
+      : 'Пришлите код доступа одним сообщением.');
   }
 
   function exportPending() {
@@ -171,7 +171,35 @@ export function createApp({ config, github, send, download, now = () => Date.now
     }
   }
 
-  return { handleUpdate, stop, exportPending, importPending };
+  function exportEditors() {
+    return [...editors].sort();
+  }
+
+  function importEditors(ids) {
+    for (const id of ids || []) editors.add(String(id));
+  }
+
+  function exportDenials() {
+    return Object.fromEntries([...denials].sort(([left], [right]) => left.localeCompare(right)));
+  }
+
+  function importDenials(entries) {
+    for (const [id, count] of Object.entries(entries || {})) {
+      const attempts = Number(count);
+      if (Number.isSafeInteger(attempts) && attempts > 0) denials.set(String(id), attempts);
+    }
+  }
+
+  return {
+    handleUpdate,
+    stop,
+    exportPending,
+    importPending,
+    exportEditors,
+    importEditors,
+    exportDenials,
+    importDenials,
+  };
 }
 
 export async function startBot(config = loadConfig(), deps = {}) {
@@ -199,9 +227,11 @@ export async function startBot(config = loadConfig(), deps = {}) {
   process.once('SIGINT', onStop);
   process.once('SIGTERM', onStop);
 
-  const mode = config.allowlist
-    ? `allowlist of ${config.allowlist.size}`
-    : 'any chat (TELEGRAM_ALLOWED_CHAT_IDS is unset)';
+  const mode = config.editorCode
+    ? 'editor code'
+    : config.allowlist
+      ? `allowlist of ${config.allowlist.size}`
+      : 'any chat (TELEGRAM_ALLOWED_CHAT_IDS is unset)';
   console.log(`Issue bot polling ${config.repo}@${config.branch}, ${mode}`);
 
   while (!stopping) {
@@ -240,6 +270,13 @@ export async function startBot(config = loadConfig(), deps = {}) {
   }
 }
 
+function safeEqual(left, right) {
+  const given = Buffer.from(String(left));
+  const expected = Buffer.from(String(right));
+  if (given.length !== expected.length) return false;
+  return timingSafeEqual(given, expected);
+}
+
 function isAllowed(config, chatId) {
   if (!config.allowlist) return true;
   return config.allowlist.has(String(chatId));
@@ -251,43 +288,25 @@ function commandOf(text) {
   return bare.startsWith('/') ? bare : '';
 }
 
-function largestPhoto(message) {
-  const sizes = message.photo;
-  if (!Array.isArray(sizes) || sizes.length === 0) return null;
-  return sizes[sizes.length - 1];
+function pdfDocument(message) {
+  const doc = message.document;
+  if (!doc?.file_id) return null;
+  const name = String(doc.file_name || '').toLowerCase();
+  const mime = String(doc.mime_type || '').toLowerCase();
+  if (mime === 'application/pdf' || name.endsWith('.pdf')) return doc;
+  return null;
 }
 
-function waitPhrase(waitMs) {
-  if (waitMs % 60_000 === 0) return `${waitMs / 60_000} мин.`;
-  return `${Math.round(waitMs / 1000)} сек.`;
+function isPdf(bytes) {
+  return bytes.length >= 5 && bytes.subarray(0, 5).toString('latin1') === '%PDF-';
 }
 
-function helpText(waitMs) {
+function helpText() {
   return [
-    'Пришлите выпуск одним текстом и одно фото.',
-    'Фото можно прикрепить к тому же сообщению или прислать следующим.',
-    `Окно ожидания фото: ${waitPhrase(waitMs)}.`,
-    '',
-    'Заголовок: ...',
-    'Тема: ...',
-    'Текст: ...',
+    'Пришлите выпуск одним PDF-файлом.',
+    'Файл не больше 20 МБ.',
+    'Новый файл заменяет предыдущий выпуск.',
   ].join('\n');
-}
-
-function rejectText(result) {
-  if (result.reason === 'missing') {
-    return `Не хватает полей: ${missingLabels(result.missing).join(', ')}.`;
-  }
-  if (result.reason === 'expired') {
-    return 'Время ожидания фото вышло. Пришлите текст выпуска ещё раз и затем фото.';
-  }
-  return 'Сначала пришлите текст выпуска (заголовок, тема, текст) и одно фото.';
-}
-
-function commitSubject(headline) {
-  const oneLine = String(headline).replace(/\s+/g, ' ').trim();
-  const subject = `Publish issue: ${oneLine}`;
-  return subject.length > 72 ? `${subject.slice(0, 71)}…` : subject;
 }
 
 function sleep(ms) {

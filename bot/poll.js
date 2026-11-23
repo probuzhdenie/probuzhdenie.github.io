@@ -11,9 +11,19 @@ const STATE_PATH = path.join(ROOT, 'bot', 'state.json');
 export function normalizeState(value) {
   const offset = Number(value?.offset);
   const pending = Array.isArray(value?.pending) ? value.pending : [];
+  const editors = Array.isArray(value?.editors)
+    ? [...new Set(value.editors.map((id) => String(id)).filter(Boolean))].sort()
+    : [];
+  const denials = {};
+  for (const [id, count] of Object.entries(value?.denials || {})) {
+    const attempts = Number(count);
+    if (id && Number.isSafeInteger(attempts) && attempts > 0) denials[String(id)] = attempts;
+  }
   return {
     offset: Number.isSafeInteger(offset) && offset >= 0 ? offset : 0,
     pending: pending.filter((entry) => entry && entry.chatId != null && entry.issue && entry.expiresAt),
+    editors,
+    denials,
   };
 }
 
@@ -21,7 +31,7 @@ export function readStateFile(file = STATE_PATH) {
   try {
     return normalizeState(JSON.parse(fs.readFileSync(file, 'utf8')));
   } catch (err) {
-    if (err.code === 'ENOENT') return { offset: 0, pending: [] };
+    if (err.code === 'ENOENT') return { offset: 0, pending: [], editors: [], denials: {} };
     throw err;
   }
 }
@@ -62,6 +72,8 @@ export async function runPoll({
 
   try {
     app.importPending(state.pending);
+    app.importEditors(state.editors);
+    app.importDenials(state.denials);
     let offset = state.offset;
     const updates = await getUpdates({
       token: config.token,
@@ -78,11 +90,16 @@ export async function runPoll({
         log.error(redactSecrets(err, [config.token, config.githubToken]));
         break;
       }
-      if (written.length - before >= 2) published = true;
+      if (written.length > before) published = true;
       offset = Number(update.update_id) + 1;
     }
 
-    const next = { offset, pending: app.exportPending() };
+    const next = normalizeState({
+      offset,
+      pending: app.exportPending(),
+      editors: app.exportEditors(),
+      denials: app.exportDenials(),
+    });
     const changed = published || !sameState(state, next);
     if (changed && writeFile) {
       if (published) {
@@ -113,7 +130,11 @@ const isDirectRun = Boolean(process.argv[1])
   && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isDirectRun) {
   main().catch((err) => {
-    console.error(redactSecrets(err, [process.env.TELEGRAM_BOT_TOKEN, process.env.GITHUB_TOKEN]));
+    console.error(redactSecrets(err, [
+      process.env.TELEGRAM_BOT_TOKEN,
+      process.env.GITHUB_TOKEN,
+      process.env.TELEGRAM_EDITOR_CODE,
+    ]));
     process.exit(1);
   });
 }

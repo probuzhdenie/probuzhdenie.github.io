@@ -20,7 +20,8 @@ export function loadConfig(env = process.env, { requireGithub = true } = {}) {
   if (!Number.isFinite(waitMs) || waitMs < 1000) {
     throw new Error('PHOTO_WAIT_MS must be a number of milliseconds >= 1000');
   }
-  return { token, githubToken, repo, branch, allowlist, waitMs };
+  const editorCode = env.TELEGRAM_EDITOR_CODE?.trim() || '';
+  return { token, githubToken, repo, branch, allowlist, waitMs, editorCode };
 }
 
 function required(env, name) {

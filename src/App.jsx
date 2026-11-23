@@ -1,8 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+GlobalWorkerOptions.workerSrc = pdfWorker;
 import chapelIcon from "./assets/icons/chapel.png";
 import bookIcon from "./assets/icons/book.png";
 import altarIcon from "./assets/icons/altar.png";
 import cupIcon from "./assets/icons/cup.png";
+import emailLink from "./assets/icons/email.png";
+import vkLink from "./assets/icons/vk.png";
+import rutubeLink from "./assets/icons/rt.png";
+import youtubeLink from "./assets/icons/yt.png";
 import svetBg from "./assets/svet.png";
 
 const pub = (file) => `${import.meta.env.BASE_URL}${file}`;
@@ -40,43 +48,26 @@ function CrossMark({ className }) {
   );
 }
 
-function MailIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3.2" y="5.4" width="17.6" height="13.2" rx="1.4" />
-      <path d="M4 7.2l8 6.1 8-6.1" />
-    </svg>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path className="play" d="M9.4 7.6v8.8L17 12z" />
-    </svg>
-  );
-}
-
 const LINKS = [
   {
     label: "Электронная почта",
     href: "#write",
-    icon: <MailIcon />,
+    icon: emailLink,
   },
   {
     label: "ВКонтакте",
     href: "https://vk.ru/probuzhdenierossii",
-    icon: <span className="vk-mark">VK</span>,
+    icon: vkLink,
   },
   {
     label: "Rutube",
     href: "https://rutube.ru/channel/34502812/",
-    icon: <PlayIcon />,
+    icon: rutubeLink,
   },
   {
     label: "YouTube",
     href: "https://www.youtube.com/@ProbuzhdenieChristian",
-    icon: <PlayIcon />,
+    icon: youtubeLink,
   },
 ];
 
@@ -361,17 +352,335 @@ function useReveal() {
   }, []);
 }
 
+function normalizedRotation(page) {
+  return ((page.rotate % 360) + 360) % 360;
+}
+
+function mostCommon(values) {
+  const counts = new Map();
+  values.forEach((value) => counts.set(value, (counts.get(value) || 0) + 1));
+  let best = null;
+  let bestCount = 0;
+  counts.forEach((count, value) => {
+    if (count > bestCount) {
+      best = value;
+      bestCount = count;
+    }
+  });
+  return best;
+}
+
+async function measureTurn(page, worker) {
+  const viewport = page.getViewport({ scale: 1.4, rotation: normalizedRotation(page) });
+  const canvas = window.document.createElement("canvas");
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const canvasContext = canvas.getContext("2d");
+  canvasContext.fillStyle = "#ffffff";
+  canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext, viewport }).promise;
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  const { data } = await worker.detect(blob);
+  if (data.orientation_degrees == null || data.orientation_confidence < 2) return null;
+  return data.orientation_degrees;
+}
+
+function usePdfIssue() {
+  const [state, setState] = useState({ ready: false, pages: null });
+
+  useEffect(() => {
+    let cancel = false;
+    let documentTask;
+    (async () => {
+      try {
+        const response = await fetch(pub("data/issue.pdf"), { cache: "no-store" });
+        if (!response.ok) throw new Error("missing");
+        const data = await response.arrayBuffer();
+        documentTask = getDocument({ data });
+        const pdf = await documentTask.promise;
+        let turns = [];
+        try {
+          const imported = await import("tesseract.js/dist/tesseract.esm.min.js");
+          const Tesseract = imported.createWorker ? imported : imported.default;
+          const worker = await Tesseract.createWorker("osd", 0, {
+            workerPath: pub("tessdata/worker.min.js"),
+            corePath: pub("tessdata/tesseract-core.wasm.js"),
+            langPath: pub("tessdata"),
+            workerBlobURL: false,
+          });
+          try {
+            for (let number = 1; number <= pdf.numPages; number += 1) {
+              if (cancel) return;
+              turns.push(await measureTurn(await pdf.getPage(number), worker));
+            }
+          } finally {
+            await worker.terminate();
+          }
+        } catch {
+          turns = [];
+        }
+        if (cancel) return;
+        const fallback = mostCommon(turns.filter((turn) => turn != null));
+        const pages = [];
+        for (let number = 1; number <= pdf.numPages; number += 1) {
+          const page = await pdf.getPage(number);
+          const rotation = (normalizedRotation(page) + (turns[number - 1] ?? fallback ?? 0)) % 360;
+          const viewport = page.getViewport({ scale: 2, rotation });
+          const canvas = window.document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const canvasContext = canvas.getContext("2d");
+          await page.render({ canvasContext, viewport }).promise;
+          pages.push(canvas.toDataURL("image/jpeg", 0.92));
+        }
+        if (!cancel) setState({ ready: true, pages });
+      } catch {
+        if (!cancel) setState({ ready: true, pages: null });
+      }
+    })();
+    return () => {
+      cancel = true;
+      documentTask?.destroy();
+    };
+  }, []);
+
+  return state;
+}
+
+function PdfPaper({ pages }) {
+  const sheets = [];
+  const list = pages.length % 2 === 0 ? pages : [...pages, null];
+  for (let index = 0; index < list.length; index += 2) {
+    sheets.push([list[index], list[index + 1]]);
+  }
+
+  return sheets.map((pair, spreadIndex) => (
+    <div className="paper-spread" key={spreadIndex}>
+      {pair.map((src, side) => {
+        const folio = spreadIndex * 2 + side + 1;
+        return (
+          <article className="paper-page pdf-page" key={folio}>
+            {src ? <img className="pdf-sheet" src={src} alt="" /> : null}
+            <p className={`paper-folio${side === 1 ? " paper-folio-right" : ""}`}>{folio}</p>
+          </article>
+        );
+      })}
+    </div>
+  ));
+}
+
+function Newspaper({ onClose }) {
+  const stackRef = useRef(null);
+  const { ready, pages } = usePdfIssue();
+
+  useLayoutEffect(() => {
+    const stack = stackRef.current;
+    if (!stack) return undefined;
+    const pages = () => [...stack.querySelectorAll(".paper-page")];
+    const equalize = () => {
+      const nodes = pages();
+      nodes.forEach((page) => {
+        page.style.minHeight = "";
+      });
+      if (window.matchMedia("(max-width: 760px)").matches) return;
+      const tallest = nodes.reduce((max, page) => Math.max(max, page.getBoundingClientRect().height), 0);
+      const height = `${Math.ceil(tallest)}px`;
+      nodes.forEach((page) => {
+        page.style.minHeight = height;
+      });
+    };
+
+    equalize();
+    const images = [...stack.querySelectorAll("img")];
+    images.forEach((image) => image.addEventListener("load", equalize));
+    images.forEach((image) => image.addEventListener("error", equalize));
+    window.addEventListener("resize", equalize);
+    document.fonts?.ready.then(equalize);
+    return () => {
+      images.forEach((image) => image.removeEventListener("load", equalize));
+      images.forEach((image) => image.removeEventListener("error", equalize));
+      window.removeEventListener("resize", equalize);
+    };
+  }, [ready, pages]);
+
+  return (
+    <div className="paper-view" role="dialog" aria-modal="true" aria-label="Наша газета">
+      <svg className="paper-filters" aria-hidden="true">
+        <filter id="newsprint" x="-3%" y="-3%" width="106%" height="106%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.62" numOctaves="2" seed="4" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.62" xChannelSelector="R" yChannelSelector="G" result="shifted" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" seed="2" result="blot" />
+          <feColorMatrix
+            in="blot"
+            type="matrix"
+            values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.72 0 0 0 0.32"
+            result="holes"
+          />
+          <feComposite in="shifted" in2="holes" operator="in" />
+        </filter>
+      </svg>
+      <button className="paper-close" type="button" onClick={onClose}>
+        Закрыть
+      </button>
+      {!ready && (
+        <div className="paper-loader" role="status" aria-live="polite">
+          <div className="paper-loader-book" aria-hidden="true">
+            <span className="paper-loader-leaf" />
+          </div>
+          <p>Открываем выпуск</p>
+        </div>
+      )}
+      <div className="paper-scroll" onClick={onClose}>
+        <div className="paper-stack" ref={stackRef} onClick={(event) => event.stopPropagation()}>
+        {ready && pages ? <PdfPaper pages={pages} /> : ready && (
+        <>
+        <div className="paper-spread">
+          <article className="paper-page">
+            <div className="paper-ink">
+              <header className="paper-mast">
+                <p>Волжский</p>
+                <h2>Свет Евангелия</h2>
+                <p>Воскресный листок</p>
+              </header>
+              <p className="paper-sample">Образец для подбора бумаги и шрифта</p>
+              <p className="paper-kicker">Воскресное собрание</p>
+              <h3>Приходите, как есть</h3>
+            </div>
+            <img
+              className="paper-photo"
+              src={pub("ascension.jpg")}
+              alt="Внутренний двор храма"
+            />
+            <div className="paper-ink">
+              <p className="paper-caption">Храм на Комсомольской, 22а</p>
+              <p className="paper-lead">
+                В воскресенье церковь собирается к десяти. Двери открыты раньше:
+                можно войти, сесть и помолчать, пока зал ещё наполняется. Первые
+                минуты здесь тихие, и в этом тоже есть место для человека, который
+                пришёл впервые.
+              </p>
+              <p className="paper-folio">1</p>
+            </div>
+          </article>
+          <article className="paper-page">
+            <div className="paper-ink">
+              <p className="paper-running">Свет Евангелия · Волжский</p>
+              <div className="paper-columns">
+                <p>
+                  Служба простая. Поют вместе, читают Писание, пастор говорит о
+                  Христе понятными словами. После проповеди можно подать записку о
+                  нужде: община молится не за общую тему, а за конкретные имена.
+                </p>
+                <p>
+                  Затем остаётся чай. Никто не спрашивает, давно ли вы в церкви и
+                  знаете ли порядок. Если захотите, с вами поговорят. Если нет,
+                  можно просто побыть рядом и уйти, когда будете готовы.
+                </p>
+                <p>
+                  Так проходит каждое воскресенье. Новый человек не обязан знать,
+                  куда встать и когда петь. Рядом подскажут, если спросите, и не
+                  станут торопить, если вы просто смотрите.
+                </p>
+              </div>
+              <p className="paper-folio paper-folio-right">2</p>
+            </div>
+          </article>
+        </div>
+        <div className="paper-spread">
+          <article className="paper-page">
+            <div className="paper-ink">
+              <p className="paper-running">Свет Евангелия · Волжский</p>
+              <p className="paper-kicker">После собрания</p>
+              <h3>Остаёмся на чай</h3>
+              <p className="paper-lead">
+                Чай накрывают в той же зале, где только что пели. Столы сдвигают,
+                ставят чашки, и разговор начинается сам: о проповеди, о детях, о
+                том, кому на этой неделе нужна помощь.
+              </p>
+              <p>
+                Можно подойти к пастору с вопросом, который не решились задать
+                при всех. Можно просто посидеть у окна. Никто не ведёт список
+                гостей и не просит оставить телефон.
+              </p>
+              <p className="paper-folio">3</p>
+            </div>
+          </article>
+          <article className="paper-page">
+            <div className="paper-ink">
+              <p className="paper-running">Свет Евангелия · Волжский</p>
+              <div className="paper-columns">
+                <p>
+                  Для детей в это время открыта воскресная школа. Они возвращаются
+                  к родителям как раз к чаю и рассказывают, что разбирали сегодня.
+                </p>
+                <p>
+                  Если вы пришли впервые, сядьте там, где свободно. Чашку вам
+                  нальют. Разговор можно не поддерживать: присутствия достаточно.
+                </p>
+              </div>
+              <p className="paper-folio paper-folio-right">4</p>
+            </div>
+          </article>
+        </div>
+        <div className="paper-spread">
+          <article className="paper-page">
+            <div className="paper-ink">
+              <p className="paper-running">Свет Евангелия · Волжский</p>
+              <p className="paper-kicker">Адрес</p>
+              <h3>Комсомольская, 22а</h3>
+              <p className="paper-lead">
+                Храм открыт каждый день с девяти утра до восьми вечера. Воскресная
+                служба начинается в десять. Вход со двора, дверь не запирают
+                заранее.
+              </p>
+              <p className="paper-folio">5</p>
+            </div>
+          </article>
+          <article className="paper-page">
+            <div className="paper-ink">
+              <p className="paper-running">Свет Евангелия · Волжский</p>
+              <p>
+                Записку о молитве можно передать в воскресенье или оставить через
+                форму на сайте. Напишите имя и нужду своими словами. Община
+                молится за то, что вы доверили.
+              </p>
+              <p>
+                Этот разворот короче предыдущих: так видно, что следующий лист
+                начинается отдельно, даже если текста на нём немного.
+              </p>
+              <p className="paper-folio paper-folio-right">6</p>
+            </div>
+          </article>
+        </div>
+        </>
+        )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [menu, setMenu] = useState(false);
+  const [paper, setPaper] = useState(false);
   const [formState, setFormState] = useState("idle");
   useReveal();
 
   useEffect(() => {
-    document.body.style.overflow = menu ? "hidden" : "";
+    document.body.style.overflow = menu || paper ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [menu]);
+  }, [menu, paper]);
+
+  useEffect(() => {
+    if (!paper) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape") setPaper(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [paper]);
 
   const closeMenu = () => setMenu(false);
 
@@ -399,6 +708,7 @@ export default function App() {
 
   return (
     <>
+      {paper && <Newspaper onClose={() => setPaper(false)} />}
       <section className="screen hero" id="top">
         <div
           className="hero-photo"
@@ -423,6 +733,16 @@ export default function App() {
               <span />
             </button>
             <nav className={`nav${menu ? " is-open" : ""}`}>
+              <button
+                className="nav-paper"
+                type="button"
+                onClick={() => {
+                  closeMenu();
+                  setPaper(true);
+                }}
+              >
+                Наша газета
+              </button>
               <a href="#visit" onClick={closeMenu}>
                 Богослужения
               </a>
@@ -484,7 +804,7 @@ export default function App() {
                 ? { target: "_blank", rel: "noreferrer" }
                 : {})}
             >
-              <span className="link-badge">{item.icon}</span>
+              <img className="link-badge" src={item.icon} alt="" />
               <span className="link-text">
                 <span className="link-label">{item.label}</span>
                 <span className="link-arrow" aria-hidden="true" />
@@ -495,11 +815,6 @@ export default function App() {
       </section>
 
       <section className={`screen about${GALLERY.length ? " has-gallery" : ""}`} id="about">
-        <div
-          className="about-bg"
-          style={{ backgroundImage: `url(${pub("ascension.jpg")})` }}
-          aria-hidden="true"
-        />
         <div className="wrap about-layout" data-reveal>
           <div className="about-copy">
             <p className="kicker">Вместе с 1990 года</p>
@@ -575,6 +890,11 @@ export default function App() {
       </section>
 
       <section className="screen visit" id="visit">
+        <div
+          className="visit-bg"
+          style={{ backgroundImage: `url(${pub("ascension.jpg")})` }}
+          aria-hidden="true"
+        />
         <div className="wrap visit-layout" data-reveal>
           <p className="kicker">Ваш первый визит</p>
           <h2>Как проходит воскресенье</h2>
