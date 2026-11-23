@@ -50,21 +50,25 @@ function CrossMark({ className }) {
 
 const LINKS = [
   {
+    id: "email",
     label: "Электронная почта",
     href: "#write",
     icon: emailLink,
   },
   {
+    id: "vk",
     label: "ВКонтакте",
     href: "https://vk.ru/probuzhdenierossii",
     icon: vkLink,
   },
   {
+    id: "rutube",
     label: "Rutube",
     href: "https://rutube.ru/channel/34502812/",
     icon: rutubeLink,
   },
   {
+    id: "youtube",
     label: "YouTube",
     href: "https://www.youtube.com/@ProbuzhdenieChristian",
     icon: youtubeLink,
@@ -177,8 +181,10 @@ function AboutCarousel({ photos }) {
     const tick = (now) => {
       const dt = Math.min(48, now - last);
       last = now;
-      const next = progressRef.current + dt / 4600;
-      moveTo(next >= count ? 0 : next);
+      let next = progressRef.current + dt / 4600;
+      next = ((next % count) + count) % count;
+      progressRef.current = next;
+      setProgress(next);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -190,9 +196,10 @@ function AboutCarousel({ photos }) {
     const head = headRef.current;
     if (!strip || !head || count < 2) return;
     const buttons = strip.querySelectorAll(".about-film-thumb");
-    const place = Math.min(progress, count - 0.0001);
-    const index = Math.floor(place);
-    const frac = place - index;
+    const view = filmFrame(progress, count, false);
+    const returning = view.current === count - 1;
+    const index = returning ? view.shown : Math.floor(progress);
+    const frac = returning ? 0 : progress - index;
     const from = buttons[index];
     const to = buttons[Math.min(count - 1, index + 1)];
     if (!from || !to) return;
@@ -804,7 +811,9 @@ export default function App() {
                 ? { target: "_blank", rel: "noreferrer" }
                 : {})}
             >
-              <img className="link-badge" src={item.icon} alt="" />
+              <span className={`link-badge link-badge-${item.id}`}>
+                <img src={item.icon} alt="" />
+              </span>
               <span className="link-text">
                 <span className="link-label">{item.label}</span>
                 <span className="link-arrow" aria-hidden="true" />

@@ -327,11 +327,57 @@ p {
 }
 
 .link-badge {
+  --badge: 56px;
+  position: relative;
   display: block;
-  width: 58px;
-  height: 58px;
+  width: var(--badge);
+  height: var(--badge);
   flex: none;
-  object-fit: contain;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.link-badge img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--badge) * var(--icon-sx));
+  height: calc(var(--badge) * var(--icon-sy));
+  max-width: none;
+  transform: translate(
+    calc(-50% + var(--badge) * var(--icon-tx)),
+    calc(-50% + var(--badge) * var(--icon-ty))
+  );
+}
+
+/* Each file's gold disc sits in a different white margin. These ratios
+   map that disc onto the badge so the four circles match. */
+.link-badge-email {
+  --icon-sx: 1.1281;
+  --icon-sy: 1.1656;
+  --icon-tx: 0.0156;
+  --icon-ty: -0.0063;
+}
+
+.link-badge-vk {
+  --icon-sx: 1.1781;
+  --icon-sy: 1.1406;
+  --icon-tx: 0.0063;
+  --icon-ty: 0.0063;
+}
+
+.link-badge-rutube {
+  --icon-sx: 1.1531;
+  --icon-sy: 1.1531;
+  --icon-tx: 0.0188;
+  --icon-ty: 0.0125;
+}
+
+.link-badge-youtube {
+  --icon-sx: 1.1335;
+  --icon-sy: 1.1335;
+  --icon-tx: 0.0124;
+  --icon-ty: 0.0062;
 }
 
 .link-text {
@@ -1364,8 +1410,7 @@ blockquote cite {
   }
 
   .link-badge {
-    width: 52px;
-    height: 52px;
+    --badge: 48px;
   }
 
   .link-label {
