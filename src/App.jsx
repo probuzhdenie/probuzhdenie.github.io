@@ -3,7 +3,7 @@ import chapelIcon from "./assets/icons/chapel.png";
 import bookIcon from "./assets/icons/book.png";
 import altarIcon from "./assets/icons/altar.png";
 import cupIcon from "./assets/icons/cup.png";
-import svetBg from "./assets/svet.jpg";
+import svetBg from "./assets/svet.png";
 
 const pub = (file) => `${import.meta.env.BASE_URL}${file}`;
 
@@ -716,7 +716,7 @@ export default function App() {
             </div>
           </div>
           <div className="footer-bottom">
-            <p>© 2026 Храм Свет Евангелия</p>
+            <p>© {new Date().getFullYear()} Храм Свет Евангелия</p>
             <p className="motto">Бог есть свет</p>
           </div>
         </div>
