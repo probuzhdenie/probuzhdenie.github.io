@@ -86,15 +86,15 @@ const LINKS = [
 ];
 
 const INSIDE = [
-  { kicker: "Молитва", title: "Часовня", icon: chapelIcon },
+  { kicker: "Молитва", title: "Часовня и святая вода", icon: chapelIcon },
   { kicker: "Для детей", title: "Воскресная школа", icon: bookIcon },
   { kicker: "Причастие", title: "Молитвенные собрания", icon: altarIcon },
-  { kicker: "Христианское кафе", title: "Чаепитие", icon: cupIcon },
+  { kicker: "Христианское кафе", title: "Чаепитие и общение", icon: cupIcon },
 ];
 
 const VISIT = [
   {
-    title: "Приходите на служение.",
+    title: "Приходите на служение",
     text: "Приходите сами и приводите друзей и близких",
   },
   {
@@ -102,7 +102,7 @@ const VISIT = [
     text: "Проповедь пастора и братьев",
   },
   {
-    title: "Молитва за нужды",
+    title: "Молимся за нужды",
     text: "Подайте записку о молитве за Ваши нужды, и церковь будет молиться за них",
   },
   {
@@ -755,13 +755,9 @@ export default function App() {
           </div>
           <div className="hero-gap" aria-hidden="true" />
           <p className="hero-call" data-reveal>
-            Пробуждение и возрождение
+            Пробуждение и возрождение России реально!
             <br />
-            России реально! Для этого есть
-            <br />
-            мы, и наша вера в нашего
-            <br />
-            спасителя Иисуса Христа!
+            Для этого есть мы, и наша вера в нашего спасителя Иисуса Христа!           
             <br />
             Присоединяйся и ты!
           </p>
@@ -900,6 +896,7 @@ export default function App() {
             Приходите на
             <br />
             богослужение
+            <span className="contacts-time">каждое воскресенье в 10:00</span>
           </h2>
           <div className="contact-blocks">
             <div className="contact-block">

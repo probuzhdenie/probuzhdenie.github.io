@@ -876,6 +876,14 @@ blockquote cite {
   line-height: 0.98;
 }
 
+.contacts-time {
+  display: block;
+  margin-top: 14px;
+  color: var(--gold);
+  font-size: 0.78em;
+  line-height: 1.15;
+}
+
 .contact-blocks {
   grid-area: info;
   max-width: 460px;
