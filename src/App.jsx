@@ -1,42 +1,53 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import chapelIcon from "./assets/icons/chapel.png";
-import bookIcon from "./assets/icons/book.png";
-import altarIcon from "./assets/icons/altar.png";
-import cupIcon from "./assets/icons/cup.png";
-import emailLink from "./assets/icons/email.png";
-import vkLink from "./assets/icons/vk.png";
-import rutubeLink from "./assets/icons/rt.png";
-import youtubeLink from "./assets/icons/yt.png";
-import svetBg from "./assets/svet.png";
-import heroBg from "./assets/cross.png";
-import pastorPhoto from "./assets/pastor.jpg";
-import visitBg from "./assets/ascension.jpg";
+import galleryFiles from "virtual:gallery";
 
 const pub = (file) => `${import.meta.env.BASE_URL}${file}`;
 
-const galleryFiles = import.meta.glob(
-  "./assets/gallery/*.{avif,jpg,jpeg,png,webp,AVIF,JPG,JPEG,PNG,WEBP}",
-  { eager: true, import: "default" },
-);
+const chapelIcon = pub("images/chapel.png");
+const bookIcon = pub("images/book.png");
+const altarIcon = pub("images/altar.png");
+const cupIcon = pub("images/cup.png");
+const emailLink = pub("images/email.jpg");
+const vkLink = pub("images/vk.jpg");
+const rutubeLink = pub("images/rt.jpg");
+const youtubeLink = pub("images/yt.jpg");
+const svetBg = pub("images/svet.jpg");
+const heroBg = pub("images/cross.jpg");
+const pastorPhoto = pub("images/pastor.jpg");
+const visitBg = pub("images/ascension.jpg");
 
-const GALLERY = Object.keys(galleryFiles)
-  .sort((a, b) => a.localeCompare(b, "ru", { numeric: true }))
-  .map((file) => galleryFiles[file]);
+const GALLERY = galleryFiles.map((photo) => pub(photo.full));
 
 const MAP_URL =
   "https://yandex.ru/maps/?ll=44.741985%2C48.803119&z=17&pt=44.741985%2C48.803119%2Cpm2rdm&mode=whatshere&whatshere%5Bpoint%5D=44.741985%2C48.803119&whatshere%5Bzoom%5D=17";
 
 const SCRIPT_URL = import.meta.env.VITE_GAS_URL;
+const MIN_NOTE_AGE_MS = 3000;
 
-async function sendNote(name, contact, message) {
+async function requestToken() {
   if (!SCRIPT_URL) throw new Error("send failed");
   const response = await fetch(SCRIPT_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ name, contact, message }),
+    body: JSON.stringify({ issue: "token" }),
   });
   const data = await response.json().catch(() => null);
-  if (!response.ok || !data?.ok) throw new Error("send failed");
+  if (!response.ok || !data?.token) throw new Error("send failed");
+  return data.token;
+}
+
+async function sendNote(name, contact, message, fax, token) {
+  if (!SCRIPT_URL) throw new Error("send failed");
+  const response = await fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ name, contact, message, fax, token }),
+  });
+  const data = await response.json().catch(() => null);
+  if (response.ok && data?.ok) return;
+  const error = new Error("send failed");
+  error.reason = data?.reason || "bad";
+  throw error;
 }
 
 function CrossMark({ className }) {
@@ -376,12 +387,6 @@ function mostCommon(values) {
   return best;
 }
 
-function shouldDetectOrientation() {
-  const agent = navigator.userAgent || "";
-  if (/iPhone|iPad|iPod/.test(agent)) return false;
-  return !window.matchMedia("(max-width: 760px)").matches;
-}
-
 function sheetScale(width, height) {
   const cssWidth = Math.min(window.innerWidth || 390, 900);
   const pixels = cssWidth * Math.min(window.devicePixelRatio || 1, 2);
@@ -457,27 +462,25 @@ function usePdfIssue() {
         });
         const pdf = await documentTask.promise;
         let turns = [];
-        if (shouldDetectOrientation()) {
+        try {
+          const imported = await import("tesseract.js/dist/tesseract.esm.min.js");
+          const Tesseract = imported.createWorker ? imported : imported.default;
+          const worker = await Tesseract.createWorker("osd", 0, {
+            workerPath: pub("tessdata/worker.min.js"),
+            corePath: pub("tessdata/tesseract-core.wasm.js"),
+            langPath: pub("tessdata"),
+            workerBlobURL: false,
+          });
           try {
-            const imported = await import("tesseract.js/dist/tesseract.esm.min.js");
-            const Tesseract = imported.createWorker ? imported : imported.default;
-            const worker = await Tesseract.createWorker("osd", 0, {
-              workerPath: pub("tessdata/worker.min.js"),
-              corePath: pub("tessdata/tesseract-core.wasm.js"),
-              langPath: pub("tessdata"),
-              workerBlobURL: false,
-            });
-            try {
-              for (let number = 1; number <= pdf.numPages; number += 1) {
-                if (cancel) return;
-                turns.push(await measureTurn(await pdf.getPage(number), worker));
-              }
-            } finally {
-              await worker.terminate();
+            for (let number = 1; number <= pdf.numPages; number += 1) {
+              if (cancel) return;
+              turns.push(await measureTurn(await pdf.getPage(number), worker));
             }
-          } catch {
-            turns = [];
+          } finally {
+            await worker.terminate();
           }
+        } catch {
+          turns = [];
         }
         if (cancel) return;
         const fallback = mostCommon(turns.filter((turn) => turn != null));
@@ -594,7 +597,21 @@ export default function App() {
   const [menu, setMenu] = useState(false);
   const [paper, setPaper] = useState(false);
   const [formState, setFormState] = useState("idle");
+  const openedRef = useRef(Date.now());
+  const tokenRef = useRef("");
   useReveal();
+
+  useEffect(() => {
+    let cancel = false;
+    requestToken()
+      .then((token) => {
+        if (!cancel) tokenRef.current = token;
+      })
+      .catch(() => {});
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   useEffect(() => {
     document.body.style.overflow = menu || paper ? "hidden" : "";
@@ -620,19 +637,48 @@ export default function App() {
     const name = form.name.value.trim();
     const contact = form.contact.value.trim();
     const message = form.message.value.trim();
+    const fax = form.fax.value.trim();
     if (!name || !message) {
       if (!name) form.name.value = "";
       else form.message.value = "";
       form.reportValidity();
       return;
     }
-    setFormState("sending");
-    try {
-      await sendNote(name, contact, message);
+    if (fax) {
       form.reset();
       setFormState("sent");
-    } catch {
-      setFormState("error");
+      return;
+    }
+    if (Date.now() - openedRef.current < MIN_NOTE_AGE_MS) {
+      setFormState("wait");
+      return;
+    }
+    setFormState("sending");
+    try {
+      let token = tokenRef.current;
+      if (!token) {
+        try {
+          token = await requestToken();
+          tokenRef.current = token;
+        } catch {
+          token = "";
+        }
+      }
+      await sendNote(name, contact, message, fax, token);
+      form.reset();
+      setFormState("sent");
+    } catch (error) {
+      if (error?.reason === "soon") setFormState("wait");
+      else if (error?.reason === "rate") setFormState("limited");
+      else {
+        tokenRef.current = "";
+        requestToken()
+          .then((token) => {
+            tokenRef.current = token;
+          })
+          .catch(() => {});
+        setFormState("error");
+      }
     }
   }
 
@@ -910,6 +956,10 @@ export default function App() {
                     required
                   />
                 </label>
+                <label className="hp-field" aria-hidden="true">
+                  <span>Факс</span>
+                  <input name="fax" tabIndex={-1} autoComplete="off" defaultValue="" />
+                </label>
                 <button
                   className="gold-button"
                   type="submit"
@@ -917,6 +967,16 @@ export default function App() {
                 >
                   {formState === "sending" ? "Отправляем…" : "Отправить"}
                 </button>
+                {formState === "wait" && (
+                  <p className="form-note is-error">
+                    Подождите несколько секунд и отправьте ещё раз.
+                  </p>
+                )}
+                {formState === "limited" && (
+                  <p className="form-note is-error">
+                    Сейчас много сообщений. Напишите чуть позже.
+                  </p>
+                )}
                 {formState === "error" && (
                   <p className="form-note is-error">
                     Не удалось отправить. Попробуйте ещё раз.
@@ -969,7 +1029,7 @@ export default function App() {
           </div>
           <div className="footer-bottom">
             <p>© {new Date().getFullYear()} Храм Свет Евангелия</p>
-            <p className="motto">Бог есть свет</p>
+            <p className="motto">переходи на сторону Христа</p>
           </div>
         </div>
       </footer>

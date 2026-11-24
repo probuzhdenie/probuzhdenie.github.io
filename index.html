@@ -3,28 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Храм Свет Евангелия</title>
+    <title>Храм Свет Евангелия в Волжском</title>
     <meta
       name="description"
-      content="Храм Свет Евангелия в Волжском. Воскресная служба в 10:00, община с 1990 года."
+      content="Храм Свет Евангелия в Волжском, ул. Комсомольская, 22а. Община «Пробуждение Христианства» с 1990 года. Воскресная служба в 10:00, храм открыт ежедневно с 9:00 до 20:00."
     />
     <link rel="canonical" href="https://probuzhdenie.github.io/" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="ru_RU" />
+    <meta property="og:site_name" content="Храм Свет Евангелия" />
     <meta property="og:url" content="https://probuzhdenie.github.io/" />
-    <meta property="og:title" content="Храм Свет Евангелия" />
+    <meta property="og:title" content="Храм Свет Евангелия в Волжском" />
     <meta
       property="og:description"
-      content="Храм Свет Евангелия в Волжском. Воскресная служба в 10:00, община с 1990 года."
+      content="Храм Свет Евангелия в Волжском, ул. Комсомольская, 22а. Община «Пробуждение Христианства» с 1990 года. Воскресная служба в 10:00, храм открыт ежедневно с 9:00 до 20:00."
     />
+    <meta property="og:image" content="https://probuzhdenie.github.io/images/cross.jpg" />
+    <meta property="og:image:width" content="1920" />
+    <meta property="og:image:height" content="1079" />
+    <meta property="og:image:alt" content="Крест храма Свет Евангелия" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "Church",
         "name": "Храм Свет Евангелия",
+        "alternateName": "Храм Свет Евангелия в Волжском",
+        "legalName": "Централизованная религиозная организация — Объединение Церквей Евангельских Христиан «Пробуждение Христианства»",
         "url": "https://probuzhdenie.github.io/",
-        "description": "Храм Свет Евангелия в Волжском. Воскресная служба в 10:00, община с 1990 года.",
+        "image": "https://probuzhdenie.github.io/images/cross.jpg",
+        "description": "Храм Свет Евангелия в Волжском, ул. Комсомольская, 22а. Община «Пробуждение Христианства» с 1990 года. Воскресная служба в 10:00, храм открыт ежедневно с 9:00 до 20:00.",
         "email": "k253vo@mail.ru",
+        "sameAs": [
+          "https://vk.ru/probuzhdenierossii",
+          "https://rutube.ru/channel/34502812/",
+          "https://www.youtube.com/@ProbuzhdenieChristian"
+        ],
         "address": {
           "@type": "PostalAddress",
           "streetAddress": "ул. Комсомольская, 22а",
@@ -53,6 +66,59 @@
         }
       }
     </script>
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+    <style>
+      html.js .static-page { display: none; }
+      html:not(.js) body { margin: 0; background: #fbf8f1; color: #243044; }
+      .static-page {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 4rem;
+        font-family: "Manrope", "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      .static-page h1 {
+        margin: 0 0 1rem;
+        font-family: "Ruslan Display", "Palatino Linotype", serif;
+        font-size: 2.4rem;
+        font-weight: 400;
+        line-height: 1.15;
+      }
+      .static-page h2 { margin: 1.75rem 0 0.5rem; font-size: 1.15rem; }
+      .static-page p, .static-page li { margin: 0.4rem 0; }
+      .static-page a { color: #1f4e79; }
+      .static-page ul { margin: 0; padding-left: 1.2rem; }
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        overflow: hidden;
+        background: #000;
+      }
+      html:not(.js) #boot { display: none; }
+      .boot-cross {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(34vh, 240px);
+        transform-origin: 50% 26%;
+        animation: boot-approach 7s linear forwards;
+      }
+      .boot-cross svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      @keyframes boot-approach {
+        from { transform: translate(-50%, -26%) scale(0.36); }
+        to { transform: translate(-50%, -26%) scale(2.4); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot { display: none; }
+      }
+    </style>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -62,11 +128,107 @@
     />
   </head>
   <body>
+    <div id="boot" aria-hidden="true">
+      <div class="boot-cross" style="transform: translate(-50%, -26%) scale(0.36)">
+        <svg viewBox="0 0 120 176" fill="none">
+          <path stroke="#c9a24b" stroke-width="2.4" stroke-linejoin="miter" d="M47 6h26v28h34v22H73v108H47V56H13V34h34V6z" />
+          <path stroke="#f4e2a4" stroke-width="1.1" stroke-linejoin="miter" d="M51 12h18v24h26v14H69V164H51V50H25V36h26V12z" />
+        </svg>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var boot = document.getElementById("boot");
+        var cross = boot && boot.querySelector(".boot-cross");
+        if (!boot || !cross || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          if (boot) boot.remove();
+          window.__bootDone = function () {};
+          return;
+        }
+        var hero = new Image();
+        hero.src = "images/cross.jpg";
+        var start = performance.now();
+        var flying = false;
+        function currentScale() {
+          var value = getComputedStyle(cross).transform;
+          var match = /matrix\(([^,]+)/.exec(value);
+          var scale = match ? parseFloat(match[1]) : 0.36;
+          return scale > 0 ? scale : 0.36;
+        }
+        function through() {
+          var from = currentScale();
+          cross.style.animation = "none";
+          cross.style.transform = "translate(-50%, -26%) scale(" + from + ")";
+          void cross.offsetWidth;
+          cross.style.transition = "transform 0.5s cubic-bezier(0.4, 0, 1, 1), opacity 0.22s linear 0.28s";
+          boot.style.transition = "opacity 0.24s linear 0.26s";
+          requestAnimationFrame(function () {
+            cross.style.transform = "translate(-50%, -26%) scale(16)";
+            cross.style.opacity = "0";
+            boot.style.opacity = "0";
+          });
+          setTimeout(function () {
+            boot.remove();
+          }, 560);
+        }
+        window.__bootDone = function () {
+          if (flying) return;
+          flying = true;
+          var wait = Math.max(0, 420 - (performance.now() - start));
+          setTimeout(through, wait);
+        };
+        setTimeout(function () {
+          window.__bootDone();
+        }, 8000);
+      })();
+    </script>
     <noscript>
       <style>
         [data-reveal] { opacity: 1 !important; transform: none !important; }
       </style>
     </noscript>
+    <main class="static-page">
+      <h1>Храм Свет Евангелия в Волжском</h1>
+      <p>Служба по воскресеньям в 10:00 с 1990 года.</p>
+      <p>
+        Пробуждение и возрождение России реально! Для этого есть мы, и наша вера
+        в нашего спасителя Иисуса Христа! Присоединяйся и ты!
+      </p>
+      <p>
+        Централизованная религиозная организация — Объединение Церквей
+        Евангельских Христиан «Пробуждение Христианства», г. Волжский,
+        Волгоградская область.
+      </p>
+      <h2>Богослужения</h2>
+      <ul>
+        <li>Воскресная служба — воскресенье, 10:00</li>
+        <li>Всенощная молитва — пятница, 22:00</li>
+      </ul>
+      <h2>В храме</h2>
+      <ul>
+        <li>Часовня и молитвенные собрания</li>
+        <li>Воскресная школа</li>
+        <li>Христианское кафе</li>
+        <li>Певческая группа</li>
+        <li>Милосердие</li>
+      </ul>
+      <p>Пастор — Кладов Сергей Юрьевич.</p>
+      <h2>Как нас найти</h2>
+      <p>
+        Волгоградская область, г. Волжский, ул. Комсомольская, 22а. Храм открыт
+        ежедневно с 9:00 до 20:00.
+      </p>
+      <p><a href="mailto:k253vo@mail.ru">k253vo@mail.ru</a></p>
+      <p>
+        <a href="https://yandex.ru/maps/?ll=44.741985%2C48.803119&amp;z=17&amp;pt=44.741985%2C48.803119%2Cpm2rdm&amp;mode=whatshere&amp;whatshere%5Bpoint%5D=44.741985%2C48.803119&amp;whatshere%5Bzoom%5D=17">Яндекс Карты</a>
+        ·
+        <a href="https://vk.ru/probuzhdenierossii">ВКонтакте</a>
+        ·
+        <a href="https://rutube.ru/channel/34502812/">Rutube</a>
+        ·
+        <a href="https://www.youtube.com/@ProbuzhdenieChristian">YouTube</a>
+      </p>
+    </main>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -925,6 +925,18 @@ blockquote cite {
   margin-bottom: 12px;
 }
 
+.card label.hp-field {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+  white-space: nowrap;
+}
+
 .card input,
 .card textarea {
   width: 100%;
@@ -1082,7 +1094,7 @@ blockquote cite {
 }
 
 .motto {
-  color: var(--gold-bright);
+  color: #fff;
   font-family: var(--display);
   font-size: 20px;
   letter-spacing: 0.06em;
