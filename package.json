@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "pdfjs-dist": "^6.5.438",
+    "pdfjs-dist": "4.10.38",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tesseract.js": "^7.0.0"

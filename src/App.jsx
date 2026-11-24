@@ -1,8 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-
-GlobalWorkerOptions.workerSrc = pdfWorker;
 import chapelIcon from "./assets/icons/chapel.png";
 import bookIcon from "./assets/icons/book.png";
 import altarIcon from "./assets/icons/altar.png";
@@ -12,6 +8,9 @@ import vkLink from "./assets/icons/vk.png";
 import rutubeLink from "./assets/icons/rt.png";
 import youtubeLink from "./assets/icons/yt.png";
 import svetBg from "./assets/svet.png";
+import heroBg from "./assets/cross.png";
+import pastorPhoto from "./assets/pastor.jpg";
+import visitBg from "./assets/ascension.jpg";
 
 const pub = (file) => `${import.meta.env.BASE_URL}${file}`;
 
@@ -377,19 +376,63 @@ function mostCommon(values) {
   return best;
 }
 
+function sheetScale(width, height) {
+  const cssWidth = Math.min(window.innerWidth || 390, 900);
+  const pixels = cssWidth * Math.min(window.devicePixelRatio || 1, 2);
+  let scale = pixels / width;
+  const longest = Math.max(width, height) * scale;
+  if (longest > 1600) scale *= 1600 / longest;
+  return Math.max(scale, 0.5);
+}
+
+function shouldDetectOrientation() {
+  const agent = navigator.userAgent || "";
+  if (/iPhone|iPad|iPod/.test(agent)) return false;
+  return !window.matchMedia("(max-width: 760px)").matches;
+}
+
 async function measureTurn(page, worker) {
-  const viewport = page.getViewport({ scale: 1.4, rotation: normalizedRotation(page) });
+  const rotation = normalizedRotation(page);
+  const base = page.getViewport({ scale: 1, rotation });
+  const viewport = page.getViewport({ scale: Math.min(sheetScale(base.width, base.height), 1.2), rotation });
   const canvas = window.document.createElement("canvas");
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
   const canvasContext = canvas.getContext("2d");
+  if (!canvasContext) return null;
   canvasContext.fillStyle = "#ffffff";
   canvasContext.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext, viewport }).promise;
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  canvas.width = 0;
+  canvas.height = 0;
+  if (!blob) return null;
   const { data } = await worker.detect(blob);
   if (data.orientation_degrees == null || data.orientation_confidence < 2) return null;
   return data.orientation_degrees;
+}
+
+async function paintPage(page, rotation) {
+  const base = page.getViewport({ scale: 1, rotation });
+  let scale = sheetScale(base.width, base.height);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const viewport = page.getViewport({ scale, rotation });
+    const canvas = window.document.createElement("canvas");
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const canvasContext = canvas.getContext("2d");
+    if (!canvasContext) {
+      scale *= 0.6;
+      continue;
+    }
+    await page.render({ canvasContext, viewport }).promise;
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.86));
+    canvas.width = 0;
+    canvas.height = 0;
+    if (blob) return URL.createObjectURL(blob);
+    scale *= 0.6;
+  }
+  throw new Error("canvas");
 }
 
 function usePdfIssue() {
@@ -398,47 +441,55 @@ function usePdfIssue() {
   useEffect(() => {
     let cancel = false;
     let documentTask;
+    const urls = [];
     (async () => {
       try {
         const response = await fetch(pub("data/issue.pdf"), { cache: "no-store" });
         if (!response.ok) throw new Error("missing");
         const data = await response.arrayBuffer();
-        documentTask = getDocument({ data });
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        const workerModule = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url");
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(workerModule.default, window.location.href).href;
+        if (cancel) return;
+        documentTask = pdfjs.getDocument({
+          data,
+          isOffscreenCanvasSupported: false,
+          isImageDecoderSupported: false,
+        });
         const pdf = await documentTask.promise;
         let turns = [];
-        try {
-          const imported = await import("tesseract.js/dist/tesseract.esm.min.js");
-          const Tesseract = imported.createWorker ? imported : imported.default;
-          const worker = await Tesseract.createWorker("osd", 0, {
-            workerPath: pub("tessdata/worker.min.js"),
-            corePath: pub("tessdata/tesseract-core.wasm.js"),
-            langPath: pub("tessdata"),
-            workerBlobURL: false,
-          });
+        if (shouldDetectOrientation()) {
           try {
-            for (let number = 1; number <= pdf.numPages; number += 1) {
-              if (cancel) return;
-              turns.push(await measureTurn(await pdf.getPage(number), worker));
+            const imported = await import("tesseract.js/dist/tesseract.esm.min.js");
+            const Tesseract = imported.createWorker ? imported : imported.default;
+            const worker = await Tesseract.createWorker("osd", 0, {
+              workerPath: pub("tessdata/worker.min.js"),
+              corePath: pub("tessdata/tesseract-core.wasm.js"),
+              langPath: pub("tessdata"),
+              workerBlobURL: false,
+            });
+            try {
+              for (let number = 1; number <= pdf.numPages; number += 1) {
+                if (cancel) return;
+                turns.push(await measureTurn(await pdf.getPage(number), worker));
+              }
+            } finally {
+              await worker.terminate();
             }
-          } finally {
-            await worker.terminate();
+          } catch {
+            turns = [];
           }
-        } catch {
-          turns = [];
         }
         if (cancel) return;
         const fallback = mostCommon(turns.filter((turn) => turn != null));
         const pages = [];
         for (let number = 1; number <= pdf.numPages; number += 1) {
+          if (cancel) return;
           const page = await pdf.getPage(number);
           const rotation = (normalizedRotation(page) + (turns[number - 1] ?? fallback ?? 0)) % 360;
-          const viewport = page.getViewport({ scale: 2, rotation });
-          const canvas = window.document.createElement("canvas");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const canvasContext = canvas.getContext("2d");
-          await page.render({ canvasContext, viewport }).promise;
-          pages.push(canvas.toDataURL("image/jpeg", 0.92));
+          const url = await paintPage(page, rotation);
+          urls.push(url);
+          pages.push(url);
         }
         if (!cancel) setState({ ready: true, pages });
       } catch {
@@ -448,6 +499,7 @@ function usePdfIssue() {
     return () => {
       cancel = true;
       documentTask?.destroy();
+      urls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
@@ -512,20 +564,6 @@ function Newspaper({ onClose }) {
 
   return (
     <div className="paper-view" role="dialog" aria-modal="true" aria-label="Наша газета">
-      <svg className="paper-filters" aria-hidden="true">
-        <filter id="newsprint" x="-3%" y="-3%" width="106%" height="106%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.62" numOctaves="2" seed="4" result="noise" />
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.62" xChannelSelector="R" yChannelSelector="G" result="shifted" />
-          <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" seed="2" result="blot" />
-          <feColorMatrix
-            in="blot"
-            type="matrix"
-            values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0.72 0 0 0 0.32"
-            result="holes"
-          />
-          <feComposite in="shifted" in2="holes" operator="in" />
-        </filter>
-      </svg>
       <button className="paper-close" type="button" onClick={onClose}>
         Закрыть
       </button>
@@ -539,127 +577,13 @@ function Newspaper({ onClose }) {
       )}
       <div className="paper-scroll" onClick={onClose}>
         <div className="paper-stack" ref={stackRef} onClick={(event) => event.stopPropagation()}>
-        {ready && pages ? <PdfPaper pages={pages} /> : ready && (
-        <>
-        <div className="paper-spread">
-          <article className="paper-page">
-            <div className="paper-ink">
-              <header className="paper-mast">
-                <p>Волжский</p>
-                <h2>Свет Евангелия</h2>
-                <p>Воскресный листок</p>
-              </header>
-              <p className="paper-sample">Образец для подбора бумаги и шрифта</p>
-              <p className="paper-kicker">Воскресное собрание</p>
-              <h3>Приходите, как есть</h3>
-            </div>
-            <img
-              className="paper-photo"
-              src={pub("ascension.jpg")}
-              alt="Внутренний двор храма"
-            />
-            <div className="paper-ink">
-              <p className="paper-caption">Храм на Комсомольской, 22а</p>
-              <p className="paper-lead">
-                В воскресенье церковь собирается к десяти. Двери открыты раньше:
-                можно войти, сесть и помолчать, пока зал ещё наполняется. Первые
-                минуты здесь тихие, и в этом тоже есть место для человека, который
-                пришёл впервые.
-              </p>
-              <p className="paper-folio">1</p>
-            </div>
-          </article>
-          <article className="paper-page">
-            <div className="paper-ink">
-              <p className="paper-running">Свет Евангелия · Волжский</p>
-              <div className="paper-columns">
-                <p>
-                  Служба простая. Поют вместе, читают Писание, пастор говорит о
-                  Христе понятными словами. После проповеди можно подать записку о
-                  нужде: община молится не за общую тему, а за конкретные имена.
-                </p>
-                <p>
-                  Затем остаётся чай. Никто не спрашивает, давно ли вы в церкви и
-                  знаете ли порядок. Если захотите, с вами поговорят. Если нет,
-                  можно просто побыть рядом и уйти, когда будете готовы.
-                </p>
-                <p>
-                  Так проходит каждое воскресенье. Новый человек не обязан знать,
-                  куда встать и когда петь. Рядом подскажут, если спросите, и не
-                  станут торопить, если вы просто смотрите.
-                </p>
-              </div>
-              <p className="paper-folio paper-folio-right">2</p>
-            </div>
-          </article>
-        </div>
-        <div className="paper-spread">
-          <article className="paper-page">
-            <div className="paper-ink">
-              <p className="paper-running">Свет Евангелия · Волжский</p>
-              <p className="paper-kicker">После собрания</p>
-              <h3>Остаёмся на чай</h3>
-              <p className="paper-lead">
-                Чай накрывают в той же зале, где только что пели. Столы сдвигают,
-                ставят чашки, и разговор начинается сам: о проповеди, о детях, о
-                том, кому на этой неделе нужна помощь.
-              </p>
-              <p>
-                Можно подойти к пастору с вопросом, который не решились задать
-                при всех. Можно просто посидеть у окна. Никто не ведёт список
-                гостей и не просит оставить телефон.
-              </p>
-              <p className="paper-folio">3</p>
-            </div>
-          </article>
-          <article className="paper-page">
-            <div className="paper-ink">
-              <p className="paper-running">Свет Евангелия · Волжский</p>
-              <div className="paper-columns">
-                <p>
-                  Для детей в это время открыта воскресная школа. Они возвращаются
-                  к родителям как раз к чаю и рассказывают, что разбирали сегодня.
-                </p>
-                <p>
-                  Если вы пришли впервые, сядьте там, где свободно. Чашку вам
-                  нальют. Разговор можно не поддерживать: присутствия достаточно.
-                </p>
-              </div>
-              <p className="paper-folio paper-folio-right">4</p>
-            </div>
-          </article>
-        </div>
-        <div className="paper-spread">
-          <article className="paper-page">
-            <div className="paper-ink">
-              <p className="paper-running">Свет Евангелия · Волжский</p>
-              <p className="paper-kicker">Адрес</p>
-              <h3>Комсомольская, 22а</h3>
-              <p className="paper-lead">
-                Храм открыт каждый день с девяти утра до восьми вечера. Воскресная
-                служба начинается в десять. Вход со двора, дверь не запирают
-                заранее.
-              </p>
-              <p className="paper-folio">5</p>
-            </div>
-          </article>
-          <article className="paper-page">
-            <div className="paper-ink">
-              <p className="paper-running">Свет Евангелия · Волжский</p>
-              <p>
-                Записку о молитве можно передать в воскресенье или оставить через
-                форму на сайте. Напишите имя и нужду своими словами. Община
-                молится за то, что вы доверили.
-              </p>
-              <p>
-                Этот разворот короче предыдущих: так видно, что следующий лист
-                начинается отдельно, даже если текста на нём немного.
-              </p>
-              <p className="paper-folio paper-folio-right">6</p>
-            </div>
-          </article>
-        </div>
-        </>
+        {ready && pages?.length ? <PdfPaper pages={pages} /> : ready && (
+          <div className="paper-spread">
+            <article className="paper-page paper-notice">
+              <p>Ведутся технические работы.</p>
+              <p>Приносим наши извинения.</p>
+            </article>
+          </div>
         )}
         </div>
       </div>
@@ -719,7 +643,7 @@ export default function App() {
       <section className="screen hero" id="top">
         <div
           className="hero-photo"
-          style={{ backgroundImage: `url(${pub("hero-bg.png")})` }}
+          style={{ backgroundImage: `url(${heroBg})` }}
           aria-hidden="true"
         />
         <header className="header">
@@ -869,7 +793,7 @@ export default function App() {
           data-reveal="photo"
           role="img"
           aria-label="Пастор Кладов Сергей Юрьевич"
-          style={{ backgroundImage: `url(${pub("pastor-photo.jpg")})` }}
+          style={{ backgroundImage: `url(${pastorPhoto})` }}
         />
         <div className="pastor-body" data-reveal>
           <p className="kicker">О нашем пастыре</p>
@@ -901,7 +825,7 @@ export default function App() {
       <section className="screen visit" id="visit">
         <div
           className="visit-bg"
-          style={{ backgroundImage: `url(${pub("ascension.jpg")})` }}
+          style={{ backgroundImage: `url(${visitBg})` }}
           aria-hidden="true"
         />
         <div className="wrap visit-layout" data-reveal>

@@ -4,6 +4,9 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   base: "./",
+  optimizeDeps: {
+    include: ["pdfjs-dist/legacy/build/pdf.mjs"],
+  },
   server: {
     watch: {
       ignored: ["**/public/tessdata/**", "**/public/data/**"],

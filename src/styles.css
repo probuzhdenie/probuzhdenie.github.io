@@ -1574,12 +1574,6 @@ blockquote cite {
   }
 }
 
-.paper-filters {
-  position: absolute;
-  width: 0;
-  height: 0;
-}
-
 .paper-view {
   position: fixed;
   inset: 0;
@@ -1757,103 +1751,8 @@ blockquote cite {
   height: auto;
 }
 
-.pdf-page > .paper-folio {
-  margin-top: 12px;
-}
-
-.paper-page + .paper-page {
-  border-left: 1px solid #ececec;
-}
-
-.paper-ink {
-  filter: url("#newsprint");
-}
-
-.paper-page > .paper-ink:last-child {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
-
-.paper-mast {
-  text-align: center;
-  border-top: 2px solid #2a241c;
-  border-bottom: 2px solid #2a241c;
-  padding: 10px 0 12px;
-}
-
-.paper-mast p {
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.paper-mast h2 {
-  margin: 4px 0;
-  font-family: "Old Standard TT", "Times New Roman", serif;
-  font-size: clamp(34px, 4vw, 48px);
-  font-weight: 400;
-  line-height: 0.95;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-}
-
-.paper-sample {
-  margin: 10px 0 0;
-  text-align: center;
-  color: #3a3a3a;
-  font-size: 13px;
-  font-style: italic;
-}
-
-.paper-kicker {
-  margin: 18px 0 0;
-  color: #222;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.paper-page h3 {
-  margin: 8px 0 0;
-  font-family: "Old Standard TT", "Times New Roman", serif;
-  font-size: clamp(26px, 3vw, 34px);
-  font-weight: 400;
-  line-height: 1.05;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.paper-photo {
-  display: block;
-  width: 100%;
-  margin: 16px 0 8px;
-}
-
-.paper-caption {
-  margin: 0 0 12px;
-  color: #333;
-  font-size: 13px;
-  font-style: italic;
-  text-align: center;
-}
-
-.paper-running {
-  margin: 0 0 14px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #161616;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-align: right;
-  text-transform: uppercase;
-}
-
-.paper-ink p.paper-folio {
-  margin-top: auto;
-  margin-bottom: 0;
+.paper-folio {
+  margin: 12px 0 0;
   font-size: 12px;
   letter-spacing: 0.08em;
 }
@@ -1862,23 +1761,34 @@ blockquote cite {
   text-align: right;
 }
 
-.paper-ink p {
-  margin: 0 0 12px;
-  font-size: 15px;
-  line-height: 1.45;
+.paper-page + .paper-page {
+  border-left: 1px solid #ececec;
 }
 
-.paper-columns {
-  columns: 2 140px;
-  column-gap: 18px;
+.paper-notice {
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+  padding: 72px 36px;
+  text-align: center;
 }
 
-.paper-lead::first-letter {
-  float: left;
-  margin: 4px 6px 0 0;
-  font-family: "Old Standard TT", serif;
-  font-size: 48px;
-  line-height: 0.8;
+.paper-notice p {
+  max-width: 16em;
+  margin: 0;
+  font-family: "Old Standard TT", "Times New Roman", serif;
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.paper-notice p + p {
+  margin-top: 18px;
+  font-family: "PT Serif", "Times New Roman", serif;
+  font-size: clamp(16px, 2vw, 20px);
+  font-style: italic;
+  line-height: 1.4;
 }
 
 @media (max-width: 760px) {
@@ -1913,7 +1823,7 @@ blockquote cite {
     background-size: 420px;
   }
 
-  .paper-columns {
-    columns: 1;
+  .paper-notice {
+    min-height: calc(100dvh - 92px);
   }
 }

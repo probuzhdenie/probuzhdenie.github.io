@@ -72,6 +72,7 @@ export function createApp({ config, github, send, download, now = () => Date.now
     }
 
     if (config.editorCode && !isEditor(chatId)) {
+      if (foreignFile(message)) await refuseFile(chatId);
       await answerAccess(chatId, text);
       return;
     }
@@ -90,8 +91,8 @@ export function createApp({ config, github, send, download, now = () => Date.now
     }
 
     const file = pdfDocument(message);
-    if (message.document && !file) {
-      await send(chatId, 'Пришлите выпуск файлом PDF.');
+    if (foreignFile(message)) {
+      await refuseFile(chatId);
       return;
     }
     if (!file) return;
@@ -122,6 +123,11 @@ export function createApp({ config, github, send, download, now = () => Date.now
     }
 
     await publish(chatId, pdfBytes);
+  }
+
+  async function refuseFile(chatId) {
+    log.info?.(`Chat ${chatId}: refused a file that is not a PDF`);
+    await send(chatId, 'Пришлите выпуск файлом PDF.');
   }
 
   async function publish(chatId, pdfBytes) {
@@ -286,6 +292,19 @@ function commandOf(text) {
   const first = String(text || '').trim().split(/\s+/, 1)[0] || '';
   const bare = first.split('@', 1)[0].toLowerCase();
   return bare.startsWith('/') ? bare : '';
+}
+
+function foreignFile(message) {
+  if (message.document && !pdfDocument(message)) return true;
+  return Boolean(
+    message.photo
+    || message.video
+    || message.audio
+    || message.voice
+    || message.video_note
+    || message.animation
+    || message.sticker
+  );
 }
 
 function pdfDocument(message) {

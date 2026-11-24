@@ -20,6 +20,40 @@ test('download errors do not include the bot token', async () => {
   );
 });
 
+test('a rate limit is retried and the message is still sent', async () => {
+  const token = '123456:ABC-secret';
+  let calls = 0;
+  await sendMessage({
+    token,
+    chatId: 1,
+    text: 'Пришлите выпуск файлом PDF.',
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          status: 429,
+          ok: false,
+          async json() {
+            return {
+              ok: false,
+              description: 'Too Many Requests: retry after 0',
+              parameters: { retry_after: 0 },
+            };
+          },
+        };
+      }
+      return {
+        status: 200,
+        ok: true,
+        async json() {
+          return { ok: true, result: {} };
+        },
+      };
+    },
+  });
+  assert.equal(calls, 2);
+});
+
 test('API descriptions that echo the token are redacted', async () => {
   const token = '123456:ABC-secret';
   await assert.rejects(

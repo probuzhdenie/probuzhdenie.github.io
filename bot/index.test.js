@@ -217,6 +217,34 @@ test('a file that is not a pdf is refused', async () => {
     }));
     assert.match(bot.sent[0].text, /файлом PDF/);
     assert.equal(bot.puts.length, 0);
+
+    await bot.handleUpdate({
+      update_id: 2,
+      message: {
+        chat: { id: 42 },
+        photo: [{ file_id: 'pic', width: 100, height: 100 }],
+      },
+    });
+    assert.match(bot.sent[1].text, /файлом PDF/);
+    assert.equal(bot.puts.length, 0);
+  } finally {
+    bot.stop();
+  }
+});
+
+test('a non-pdf file is refused before the editor code is accepted', async () => {
+  const bot = app({ editorCode: 'parish-code' });
+  try {
+    await bot.handleUpdate({
+      update_id: 1,
+      message: {
+        chat: { id: 77 },
+        document: { file_id: 'doc', file_name: 'note.docx', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+      },
+    });
+    assert.match(bot.sent[0].text, /файлом PDF/);
+    assert.match(bot.sent[1].text, /код доступа/);
+    assert.equal(bot.puts.length, 0);
   } finally {
     bot.stop();
   }

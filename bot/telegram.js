@@ -40,11 +40,30 @@ export async function downloadPhoto({ token, fileId, fetchImpl = globalThis.fetc
 }
 
 async function call(url, options, fetchImpl, what) {
-  try {
-    return await fetchImpl(url, options);
-  } catch {
-    throw new Error(`Telegram ${what} failed`);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let res;
+    try {
+      res = await fetchImpl(url, options);
+    } catch {
+      throw new Error(`Telegram ${what} failed`);
+    }
+    if (res.status !== 429 || attempt === 2) return res;
+    const data = await readJson(res);
+    await sleep(retrySeconds(data) * 1000);
   }
+  throw new Error(`Telegram ${what} failed`);
+}
+
+function retrySeconds(data) {
+  const fromParams = Number(data?.parameters?.retry_after);
+  if (Number.isFinite(fromParams) && fromParams >= 0) return Math.min(fromParams, 60);
+  const match = /retry after (\d+)/i.exec(data?.description || '');
+  if (match) return Math.min(Number(match[1]), 60);
+  return 1;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function readJson(res) {
