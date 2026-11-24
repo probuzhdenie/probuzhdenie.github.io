@@ -52,6 +52,7 @@ export async function runPoll({
   now = () => Date.now(),
   readState = () => readStateFile(),
   writeFile,
+  upright = async (bytes) => bytes,
   log = console,
 }) {
   const state = normalizeState(readState());
@@ -66,6 +67,7 @@ export async function runPoll({
     },
     send: (chatId, text) => sendMessage({ token: config.token, chatId, text, fetchImpl }),
     download: (fileId) => downloadPhoto({ token: config.token, fileId, fetchImpl }),
+    upright,
     now,
     log,
   });
@@ -121,7 +123,8 @@ function defaultWrite(rel, bytes) {
 
 async function main() {
   const config = loadConfig(process.env, { requireGithub: false });
-  const result = await runPoll({ config, writeFile: defaultWrite });
+  const { uprightPdf } = await import('./upright.js');
+  const result = await runPoll({ config, writeFile: defaultWrite, upright: uprightPdf });
   setOutput('status', result.status);
   console.log(`Telegram poll status: ${result.status}, offset ${result.state.offset}`);
 }

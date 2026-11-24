@@ -10,7 +10,15 @@ const MAX_PDF_BYTES = 20 * 1024 * 1024;
 
 const MAX_CODE_ATTEMPTS = 8;
 
-export function createApp({ config, github, send, download, now = () => Date.now(), log = console }) {
+export function createApp({
+  config,
+  github,
+  send,
+  download,
+  upright = async (bytes) => bytes,
+  now = () => Date.now(),
+  log = console,
+}) {
   const inbox = createInbox({ waitMs: config.waitMs, now });
   const timers = new Map();
   const editors = new Set();
@@ -132,9 +140,10 @@ export function createApp({ config, github, send, download, now = () => Date.now
 
   async function publish(chatId, pdfBytes) {
     try {
+      const ready = Buffer.from(await upright(pdfBytes));
       const result = await github.putFile({
         path: ISSUE_PDF_PATH,
-        bytes: pdfBytes,
+        bytes: ready,
         message: 'Publish newspaper PDF',
       });
       log.info?.(`Published PDF for chat ${chatId}: ${result.commitUrl || 'workspace'}`);
@@ -216,11 +225,13 @@ export async function startBot(config = loadConfig(), deps = {}) {
     branch: config.branch,
     fetchImpl,
   });
+  const { uprightPdf } = await import('./upright.js');
   const app = createApp({
     config,
     github,
     send: (chatId, text) => sendMessage({ token: config.token, chatId, text, fetchImpl }),
     download: (fileId) => downloadPhoto({ token: config.token, fileId, fetchImpl }),
+    upright: uprightPdf,
     log: deps.log || console,
   });
 

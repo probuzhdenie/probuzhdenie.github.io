@@ -27,6 +27,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
 
       - name: Poll Telegram
         id: result
@@ -44,7 +48,7 @@ jobs:
           node bot/poll.js
 
       - name: Commit the issue
-        if: steps.result.outputs.status != 'idle'
+        if: success() && steps.result.outputs.status != 'idle'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

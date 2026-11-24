@@ -45,7 +45,7 @@ export default defineConfig({
   },
   server: {
     watch: {
-      ignored: ["**/public/tessdata/**", "**/public/data/**"],
+      ignored: ["**/public/data/**"],
     },
   },
 });

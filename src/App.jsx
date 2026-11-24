@@ -369,24 +369,6 @@ function useReveal() {
   }, []);
 }
 
-function normalizedRotation(page) {
-  return ((page.rotate % 360) + 360) % 360;
-}
-
-function mostCommon(values) {
-  const counts = new Map();
-  values.forEach((value) => counts.set(value, (counts.get(value) || 0) + 1));
-  let best = null;
-  let bestCount = 0;
-  counts.forEach((count, value) => {
-    if (count > bestCount) {
-      best = value;
-      bestCount = count;
-    }
-  });
-  return best;
-}
-
 function sheetScale(width, height) {
   const cssWidth = Math.min(window.innerWidth || 390, 900);
   const pixels = cssWidth * Math.min(window.devicePixelRatio || 1, 2);
@@ -396,31 +378,11 @@ function sheetScale(width, height) {
   return Math.max(scale, 0.5);
 }
 
-async function measureTurn(page, worker) {
-  const rotation = normalizedRotation(page);
-  const viewport = page.getViewport({ scale: 1.4, rotation });
-  const canvas = window.document.createElement("canvas");
-  canvas.width = Math.ceil(viewport.width);
-  canvas.height = Math.ceil(viewport.height);
-  const canvasContext = canvas.getContext("2d");
-  if (!canvasContext) return null;
-  canvasContext.fillStyle = "#ffffff";
-  canvasContext.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvasContext, viewport }).promise;
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-  canvas.width = 0;
-  canvas.height = 0;
-  if (!blob) return null;
-  const { data } = await worker.detect(blob);
-  if (data.orientation_degrees == null || data.orientation_confidence < 2) return null;
-  return data.orientation_degrees;
-}
-
-async function paintPage(page, rotation) {
-  const base = page.getViewport({ scale: 1, rotation });
+async function paintPage(page) {
+  const base = page.getViewport({ scale: 1 });
   let scale = sheetScale(base.width, base.height);
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const viewport = page.getViewport({ scale, rotation });
+    const viewport = page.getViewport({ scale });
     const canvas = window.document.createElement("canvas");
     canvas.width = Math.ceil(viewport.width);
     canvas.height = Math.ceil(viewport.height);
@@ -439,16 +401,21 @@ async function paintPage(page, rotation) {
   throw new Error("canvas");
 }
 
+let issueCache = null;
+
 function usePdfIssue() {
-  const [state, setState] = useState({ ready: false, pages: null });
+  const [state, setState] = useState(
+    issueCache ? { ready: true, pages: issueCache } : { ready: false, pages: null },
+  );
 
   useEffect(() => {
+    if (issueCache) return undefined;
     let cancel = false;
     let documentTask;
     const urls = [];
     (async () => {
       try {
-        const response = await fetch(pub("data/issue.pdf"), { cache: "no-store" });
+        const response = await fetch(pub("data/issue.pdf"));
         if (!response.ok) throw new Error("missing");
         const data = await response.arrayBuffer();
         const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -461,39 +428,17 @@ function usePdfIssue() {
           isImageDecoderSupported: false,
         });
         const pdf = await documentTask.promise;
-        let turns = [];
-        try {
-          const imported = await import("tesseract.js/dist/tesseract.esm.min.js");
-          const Tesseract = imported.createWorker ? imported : imported.default;
-          const worker = await Tesseract.createWorker("osd", 0, {
-            workerPath: pub("tessdata/worker.min.js"),
-            corePath: pub("tessdata/tesseract-core.wasm.js"),
-            langPath: pub("tessdata"),
-            workerBlobURL: false,
-          });
-          try {
-            for (let number = 1; number <= pdf.numPages; number += 1) {
-              if (cancel) return;
-              turns.push(await measureTurn(await pdf.getPage(number), worker));
-            }
-          } finally {
-            await worker.terminate();
-          }
-        } catch {
-          turns = [];
-        }
         if (cancel) return;
-        const fallback = mostCommon(turns.filter((turn) => turn != null));
         const pages = [];
         for (let number = 1; number <= pdf.numPages; number += 1) {
           if (cancel) return;
           const page = await pdf.getPage(number);
-          const rotation = (normalizedRotation(page) + (turns[number - 1] ?? fallback ?? 0)) % 360;
-          const url = await paintPage(page, rotation);
+          const url = await paintPage(page);
           urls.push(url);
           pages.push(url);
+          if (!cancel) setState({ ready: true, pages: pages.slice() });
         }
-        if (!cancel) setState({ ready: true, pages });
+        if (!cancel) issueCache = pages.slice();
       } catch {
         if (!cancel) setState({ ready: true, pages: null });
       }
@@ -501,7 +446,7 @@ function usePdfIssue() {
     return () => {
       cancel = true;
       documentTask?.destroy();
-      urls.forEach((url) => URL.revokeObjectURL(url));
+      if (!issueCache) urls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
@@ -745,7 +690,7 @@ export default function App() {
           <div className="hero-left" data-reveal>
             <p className="hero-kicker">
               Служба по воскресеньям
-              <br />в 10:00 с 1990 года
+              <br />в городе Волжском в 10:00 с 1990 года
             </p>
             <h1>
               <span>Храм</span>
