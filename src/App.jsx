@@ -125,202 +125,259 @@ function useReducedMotion() {
   return reduce;
 }
 
-function smoothstep(edge0, edge1, value) {
-  const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
-  return t * t * (3 - 2 * t);
-}
-
-function filmFrame(progress, count, scrubbing) {
-  const wrapped = ((progress % count) + count) % count;
-  const current = Math.floor(wrapped);
-  const frac = wrapped - current;
-  const fade = scrubbing ? smoothstep(0.32, 0.68, frac) : smoothstep(0.58, 0.94, frac);
-  const next = (current + 1) % count;
-  return {
-    current,
-    next,
-    fade,
-    frac,
-    shown: fade < 0.5 ? current : next,
-  };
-}
-
 function AboutCarousel({ photos }) {
   const count = photos.length;
   const reduce = useReducedMotion();
-  const [progress, setProgress] = useState(0);
-  const [hover, setHover] = useState(false);
-  const [focus, setFocus] = useState(false);
-  const [scrub, setScrub] = useState(false);
-  const progressRef = useRef(0);
-  const stripRef = useRef(null);
-  const headRef = useRef(null);
-  const frame = filmFrame(progress, count, scrub);
-  const hold = hover || focus || scrub || reduce;
-
-  function moveTo(value) {
-    const next = Math.min(count - 1, Math.max(0, value));
-    progressRef.current = next;
-    setProgress(next);
-  }
-
-  function progressFromX(clientX) {
-    const strip = stripRef.current;
-    if (!strip) return 0;
-    const buttons = [...strip.querySelectorAll(".about-film-thumb")];
-    if (!buttons.length) return 0;
-    const rect = strip.getBoundingClientRect();
-    const x = clientX - rect.left + strip.scrollLeft;
-    const centers = buttons.map((button) => button.offsetLeft + button.offsetWidth / 2);
-    if (x <= centers[0]) return 0;
-    const last = centers.length - 1;
-    if (x >= centers[last]) return last;
-    for (let index = 0; index < last; index += 1) {
-      if (x <= centers[index + 1]) {
-        const span = centers[index + 1] - centers[index];
-        return index + (x - centers[index]) / span;
-      }
-    }
-    return last;
-  }
+  const galleryRef = useRef(null);
+  const trackRef = useRef(null);
+  const indexRef = useRef(null);
+  const offsetRef = useRef(0);
+  const metricsRef = useRef({ stride: 0, loop: 0 });
+  const shownRef = useRef(-1);
+  const holdRef = useRef({ hover: false, focus: false, drag: false, visible: false });
+  const reduceRef = useRef(reduce);
+  const pointerRef = useRef(null);
+  const placedRef = useRef(false);
+  const apiRef = useRef({
+    sync() {},
+    apply() {},
+    stride() {
+      return 0;
+    },
+  });
+  const [copies, setCopies] = useState(2);
+  reduceRef.current = reduce;
 
   useEffect(() => {
-    if (hold || count < 2) return undefined;
+    const stage = galleryRef.current;
+    const track = trackRef.current;
+    if (!stage || !track || count < 1) return undefined;
+
     let raf = 0;
-    let last = performance.now();
+    let last = 0;
+    let running = false;
+
+    const measure = () => {
+      const card = track.querySelector(".about-card");
+      const viewport = stage.querySelector(".about-viewport");
+      if (!card || !viewport) return;
+      const styles = getComputedStyle(track);
+      const gap = Number.parseFloat(styles.columnGap || styles.gap) || 0;
+      const stride = card.offsetWidth + gap;
+      const loop = stride * count;
+      metricsRef.current = { stride, loop };
+      if (!placedRef.current && stride > 0) {
+        offsetRef.current = stride * 0.45;
+        placedRef.current = true;
+      }
+      const need = loop > 0 ? Math.max(2, Math.ceil(viewport.clientWidth / loop) + 1) : 2;
+      setCopies((prev) => (prev === need ? prev : need));
+    };
+
+    const apply = () => {
+      const { stride, loop } = metricsRef.current;
+      if (!(loop > 0)) return;
+      offsetRef.current = ((offsetRef.current % loop) + loop) % loop;
+      track.style.transform = `translate3d(${-offsetRef.current}px,0,0)`;
+      const viewport = stage.querySelector(".about-viewport");
+      if (!viewport || !indexRef.current || !(stride > 0)) return;
+      const center = offsetRef.current + viewport.clientWidth / 2;
+      const index = ((Math.floor(center / stride) % count) + count) % count;
+      if (index !== shownRef.current) {
+        shownRef.current = index;
+        indexRef.current.textContent = `${index + 1} — ${count}`;
+      }
+    };
+
     const tick = (now) => {
-      const dt = Math.min(48, now - last);
+      const dt = last ? Math.min(48, now - last) : 16;
       last = now;
-      let next = progressRef.current + dt / 4600;
-      next = ((next % count) + count) % count;
-      progressRef.current = next;
-      setProgress(next);
+      const { stride } = metricsRef.current;
+      if (stride > 0) {
+        offsetRef.current += (stride / 5200) * dt;
+        apply();
+      }
       raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [hold, count]);
 
-  useLayoutEffect(() => {
-    const strip = stripRef.current;
-    const head = headRef.current;
-    if (!strip || !head || count < 2) return;
-    const buttons = strip.querySelectorAll(".about-film-thumb");
-    const view = filmFrame(progress, count, false);
-    const returning = view.current === count - 1;
-    const index = returning ? view.shown : Math.floor(progress);
-    const frac = returning ? 0 : progress - index;
-    const from = buttons[index];
-    const to = buttons[Math.min(count - 1, index + 1)];
-    if (!from || !to) return;
-    const start = from.offsetLeft + from.offsetWidth / 2;
-    const end = to.offsetLeft + to.offsetWidth / 2;
-    head.style.left = `${start + (end - start) * frac - strip.scrollLeft}px`;
-  }, [progress, count]);
+    const sync = () => {
+      const hold = holdRef.current;
+      const play =
+        !reduceRef.current && hold.visible && !hold.hover && !hold.focus && !hold.drag && count > 1;
+      if (play && !running) {
+        running = true;
+        last = 0;
+        raf = requestAnimationFrame(tick);
+      } else if (!play && running) {
+        running = false;
+        cancelAnimationFrame(raf);
+      }
+    };
+
+    apiRef.current = { sync, apply, stride: () => metricsRef.current.stride };
+    measure();
+    apply();
+
+    const resize = new ResizeObserver(() => {
+      measure();
+      apply();
+    });
+    resize.observe(stage);
+
+    const seen = new IntersectionObserver(([entry]) => {
+      holdRef.current.visible = Boolean(entry?.isIntersecting);
+      sync();
+    });
+    seen.observe(stage);
+
+    const onWheel = (event) => {
+      if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      event.preventDefault();
+      offsetRef.current += event.deltaX;
+      apply();
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    sync();
+
+    return () => {
+      running = false;
+      cancelAnimationFrame(raf);
+      resize.disconnect();
+      seen.disconnect();
+      stage.removeEventListener("wheel", onWheel);
+      apiRef.current = {
+        sync() {},
+        apply() {},
+        stride() {
+          return 0;
+        },
+      };
+    };
+  }, [count, copies]);
 
   useEffect(() => {
-    const strip = stripRef.current;
-    const thumb = strip?.querySelectorAll(".about-film-thumb")[frame.shown];
-    if (!strip || !thumb || scrub) return;
-    const left = thumb.offsetLeft - (strip.clientWidth - thumb.offsetWidth) / 2;
-    strip.scrollTo({ left: Math.max(0, left), behavior: reduce ? "auto" : "smooth" });
-  }, [frame.shown, scrub, reduce]);
+    reduceRef.current = reduce;
+    apiRef.current.sync();
+  }, [reduce]);
 
-  function step(dir) {
-    moveTo((frame.shown + dir + count) % count);
+  function shift(cards) {
+    const stride = apiRef.current.stride();
+    if (!stride) return;
+    offsetRef.current += cards * stride;
+    apiRef.current.apply();
+  }
+
+  function onPointerDown(event) {
+    if (event.button !== 0) return;
+    pointerRef.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      origin: offsetRef.current,
+      dragging: event.pointerType === "mouse",
+    };
+    if (event.pointerType === "mouse") {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      holdRef.current.drag = true;
+      apiRef.current.sync();
+    }
+  }
+
+  function onPointerMove(event) {
+    const point = pointerRef.current;
+    if (!point || point.id !== event.pointerId) return;
+    const dx = event.clientX - point.x;
+    const dy = event.clientY - point.y;
+    if (!point.dragging) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dy) > Math.abs(dx)) {
+        pointerRef.current = null;
+        return;
+      }
+      point.dragging = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      holdRef.current.drag = true;
+      apiRef.current.sync();
+    }
+    offsetRef.current = point.origin - dx;
+    apiRef.current.apply();
+  }
+
+  function onPointerUp(event) {
+    const point = pointerRef.current;
+    if (!point || point.id !== event.pointerId) return;
+    pointerRef.current = null;
+    if (!point.dragging) return;
+    holdRef.current.drag = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    apiRef.current.sync();
   }
 
   return (
     <div
       className="about-gallery"
+      ref={galleryRef}
       role="region"
       aria-roledescription="карусель"
       aria-label="Фотографии храма"
       tabIndex={0}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onFocus={() => setFocus(true)}
+      onMouseEnter={() => {
+        holdRef.current.hover = true;
+        apiRef.current.sync();
+      }}
+      onMouseLeave={() => {
+        holdRef.current.hover = false;
+        apiRef.current.sync();
+      }}
+      onFocus={(event) => {
+        if (!event.currentTarget.matches(":focus-visible")) return;
+        holdRef.current.focus = true;
+        apiRef.current.sync();
+      }}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setFocus(false);
+        if (event.currentTarget.contains(event.relatedTarget)) return;
+        holdRef.current.focus = false;
+        apiRef.current.sync();
       }}
       onKeyDown={(event) => {
         if (event.key === "ArrowRight") {
           event.preventDefault();
-          step(1);
+          shift(1);
         } else if (event.key === "ArrowLeft") {
           event.preventDefault();
-          step(-1);
+          shift(-1);
         } else if (event.key === "Home") {
           event.preventDefault();
-          moveTo(0);
+          offsetRef.current = 0;
+          apiRef.current.apply();
         } else if (event.key === "End") {
           event.preventDefault();
-          moveTo(count - 1);
+          offsetRef.current = apiRef.current.stride() * Math.max(0, count - 1);
+          apiRef.current.apply();
         }
       }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
-      <div className="about-frame">
-        {photos.map((src, index) => {
-          let opacity = 0;
-          if (index === frame.current) opacity = 1 - frame.fade;
-          else if (index === frame.next && frame.next !== frame.current) opacity = frame.fade;
-          const scale = reduce ? 1 : 1.03 + (index === frame.current ? frame.frac * 0.045 : 0);
-          return (
-            <img
-              key={src}
-              src={src}
-              alt=""
-              draggable="false"
-              style={{
-                opacity,
-                transform: `scale(${scale})`,
-                zIndex: opacity > 0.5 ? 1 : 0,
-              }}
-            />
-          );
-        })}
-      </div>
-      <div className="about-film-meta">
-        <span>
-          {frame.shown + 1}/{count}
-        </span>
-      </div>
-      <div className="about-film-wrap">
-        {count > 1 && <div className="about-playhead" ref={headRef} aria-hidden="true" />}
-        <div
-          className="about-film"
-          ref={stripRef}
-          onPointerDown={(event) => {
-            if (event.button !== 0 || count < 2) return;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            setScrub(true);
-            moveTo(progressFromX(event.clientX));
-          }}
-          onPointerMove={(event) => {
-            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-            moveTo(progressFromX(event.clientX));
-          }}
-          onPointerUp={(event) => {
-            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-            event.currentTarget.releasePointerCapture(event.pointerId);
-            const nearest = Math.round(progressRef.current);
-            moveTo(nearest);
-            setScrub(false);
-          }}
-        >
-          {photos.map((src, index) => (
-            <button
-              className={`about-film-thumb${index === frame.shown ? " is-active" : ""}`}
-              key={src}
-              type="button"
-              aria-label={`Фото ${index + 1}`}
-              aria-current={index === frame.shown ? "true" : undefined}
-              onClick={() => moveTo(index)}
-            >
-              <img src={src} alt="" draggable="false" />
-            </button>
-          ))}
+      <div className="about-stage">
+        <div className="about-viewport">
+          <div className="about-track" ref={trackRef}>
+            {Array.from({ length: copies }, (_, copy) =>
+              photos.map((src, index) => (
+                <div className="about-card" key={`${copy}-${index}`}>
+                  <img src={src} alt="" draggable="false" />
+                </div>
+              )),
+            )}
+          </div>
         </div>
+        <p className="about-index" ref={indexRef} aria-hidden="true">
+          1 — {count}
+        </p>
       </div>
     </div>
   );

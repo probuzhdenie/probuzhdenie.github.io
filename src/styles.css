@@ -477,26 +477,37 @@ blockquote p {
   text-transform: uppercase;
 }
 
+.about.has-gallery {
+  align-items: flex-start;
+  padding: 72px 0 64px;
+}
+
 .about.has-gallery .about-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 420px) minmax(520px, 760px);
-  justify-content: start;
+  grid-template-columns: 1fr;
   align-items: start;
-  column-gap: 48px;
-  width: min(1320px, calc(100% - 96px));
-  margin-left: max(48px, calc((100% - 1320px) / 2 - 40px));
+  gap: 36px;
+  width: min(1104px, calc(100% - 64px));
+  margin-left: auto;
   margin-right: auto;
 }
 
 .about.has-gallery .about-lead {
-  max-width: 420px;
+  max-width: none;
   margin-top: 10px;
 }
 
 .about-gallery {
-  justify-self: start;
-  width: min(760px, 100%);
+  justify-self: stretch;
+  width: 100%;
   outline: none;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.about-gallery:active {
+  cursor: grabbing;
 }
 
 .about-gallery:focus-visible {
@@ -504,108 +515,62 @@ blockquote p {
   outline-offset: 6px;
 }
 
-.about-frame {
+.about-stage {
   position: relative;
   overflow: hidden;
   aspect-ratio: 4 / 3;
   border-radius: 12px;
-  background: #e6dfd2;
+  background: transparent;
 }
 
-.about-frame img {
+.about-viewport {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  object-fit: cover;
-  pointer-events: none;
-  user-select: none;
-}
-
-.about-film-meta {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-}
-
-.about-film-wrap {
-  position: relative;
-  margin-top: 14px;
-}
-
-.about-playhead {
-  position: absolute;
-  top: 0;
-  bottom: -6px;
-  z-index: 2;
-  width: 1.5px;
-  background: var(--ink);
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-
-.about-playhead::before {
-  content: "";
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink);
-  transform: translateX(-50%);
-}
-
-.about-film {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  touch-action: none;
-  cursor: ew-resize;
-  user-select: none;
-}
-
-.about-film::-webkit-scrollbar {
-  display: none;
-}
-
-.about-film-thumb {
-  flex: 1 0 36px;
-  min-width: 36px;
-  aspect-ratio: 16 / 10;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
+  left: 0;
+  right: 0;
+  top: 14%;
+  height: 64%;
   overflow: hidden;
-  background: #e6dfd2;
-  cursor: pointer;
 }
 
-.about-film-thumb img {
+.about-track {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  height: 100%;
+  width: max-content;
+  will-change: transform;
+}
+
+.about-card {
+  flex: 0 0 auto;
+  height: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: transparent;
+}
+
+.about-card img {
   display: block;
   width: 100%;
   height: 100%;
   max-width: none;
   object-fit: cover;
-  opacity: 0.55;
   pointer-events: none;
   user-select: none;
 }
 
-.about-film-thumb.is-active img {
-  opacity: 1;
-}
-
-.about-film-thumb:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
+.about-index {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .inside {
@@ -1160,10 +1125,6 @@ blockquote cite {
     transform: none;
     animation: none;
   }
-
-  .about-frame img {
-    transform: none;
-  }
 }
 
 @media (max-width: 1100px) {
@@ -1242,7 +1203,7 @@ blockquote cite {
 
   .about-gallery {
     justify-self: stretch;
-    width: min(720px, 100%);
+    width: 100%;
   }
 
   blockquote {
@@ -1371,6 +1332,10 @@ blockquote cite {
     padding: 48px 0 40px;
   }
 
+  .about.has-gallery {
+    padding: 48px 0 40px;
+  }
+
   .footer {
     min-height: 0;
   }
@@ -1457,22 +1422,14 @@ blockquote cite {
   .about.has-gallery .about-layout,
   .about-copy,
   .about-gallery,
-  .about-film-wrap,
-  .about-film {
+  .about-stage,
+  .about-viewport {
     min-width: 0;
     max-width: 100%;
   }
 
   .about-gallery {
     width: 100%;
-  }
-
-  .about-film-wrap {
-    overflow: hidden;
-  }
-
-  .about-film-thumb {
-    flex: 0 0 72px;
   }
 
   .inside h2 {
