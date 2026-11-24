@@ -376,6 +376,12 @@ function mostCommon(values) {
   return best;
 }
 
+function shouldDetectOrientation() {
+  const agent = navigator.userAgent || "";
+  if (/iPhone|iPad|iPod/.test(agent)) return false;
+  return !window.matchMedia("(max-width: 760px)").matches;
+}
+
 function sheetScale(width, height) {
   const cssWidth = Math.min(window.innerWidth || 390, 900);
   const pixels = cssWidth * Math.min(window.devicePixelRatio || 1, 2);
@@ -385,16 +391,9 @@ function sheetScale(width, height) {
   return Math.max(scale, 0.5);
 }
 
-function shouldDetectOrientation() {
-  const agent = navigator.userAgent || "";
-  if (/iPhone|iPad|iPod/.test(agent)) return false;
-  return !window.matchMedia("(max-width: 760px)").matches;
-}
-
 async function measureTurn(page, worker) {
   const rotation = normalizedRotation(page);
-  const base = page.getViewport({ scale: 1, rotation });
-  const viewport = page.getViewport({ scale: Math.min(sheetScale(base.width, base.height), 1.2), rotation });
+  const viewport = page.getViewport({ scale: 1.4, rotation });
   const canvas = window.document.createElement("canvas");
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
