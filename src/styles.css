@@ -928,18 +928,22 @@ blockquote cite {
 }
 
 .visit-verse {
+  width: 100%;
   max-width: 760px;
   margin: 40px auto 0;
   text-align: center;
 }
 
 .visit-verse-text {
+  display: block;
+  width: 100%;
   margin: 0;
   color: rgba(0, 0, 0, 0.7);
   font-family: "PT Serif", Georgia, serif;
   font-size: 17px;
   font-style: italic;
   line-height: 1.6;
+  text-align: center;
 }
 
 .visit-verse-ref {
@@ -950,6 +954,7 @@ blockquote cite {
   font-style: normal;
   font-weight: 700;
   letter-spacing: 0.06em;
+  text-align: center;
 }
 
 .contacts-grid {
@@ -1472,6 +1477,8 @@ blockquote cite {
   .contact-blocks {
     display: block;
     align-self: auto;
+    width: 100%;
+    max-width: none;
   }
 
   .contact-blocks > .map-button {
