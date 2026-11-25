@@ -1553,8 +1553,11 @@ blockquote cite {
 
   .brand span {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+	font-size: 20px;
+	white-space: normal; 
+    overflow: visible;
+    text-overflow: clip;
+	line-height: 1.2;
   }
 
   .share-header {
