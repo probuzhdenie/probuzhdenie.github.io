@@ -1,6 +1,6 @@
 ## Отправка писем с сайта
 
-Сайт отправляет записки через веб-приложение Google Apps Script. В `.env.production` нужен **deployment URL** вида `https://script.google.com/macros/s/AKfycb…/exec`, а не `script ID` из адреса редактора. Сейчас рабочий адрес — `https://script.google.com/macros/s/AKfycbzUANoHjOxe_lr4MQ6djBHZmN5gloe46WOOE7m_QWEDJM1dmlI7Vqt9orfZVCbtg13CsQ/exec`.
+Сайт отправляет записки через веб-приложение Google Apps Script. В `.env.production` нужен **deployment URL** вида `https://script.google.com/macros/s/AKfycb…/exec`, а не `script ID` из адреса редактора. Сейчас рабочий адрес — `https://script.google.com/macros/s/AKfycbxUhqnS9DsQXKGOpzqz5sMj3OrazGR0oamSSPRhOGMZ0MgPTLWyu1hQiN8JnQWQoqlQDQ/exec`.
 
 После изменений `gas/Code.gs` нужно в редакторе скрипта сделать **Развёртывания → изменить → Версия: новая версия → Развернуть**. Просто сохранить код достаточно только для тестов внутри редактора: сайт продолжает вызывать ту версию, которая привязана к deployment URL. Проверять ответ можно запросом `POST` с телом `{"issue":"token"}`: ожидается `HTTP 200` и JSON с полем `token`.
 
