@@ -547,7 +547,7 @@ function useReveal() {
           if (!entry.isIntersecting) entry.target.classList.remove("is-in");
         });
       },
-      { threshold: 0, rootMargin: "120px 0px 0px 0px" },
+      { threshold: 0, rootMargin: "120px 0px 180px 0px" },
     );
     nodes.forEach((node) => {
       show.observe(node);
