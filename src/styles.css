@@ -1518,16 +1518,20 @@ blockquote cite {
   }
 
   .share-header {
-    gap: 7px;
+    justify-content: center;
+    gap: 0;
+    width: 38px;
     min-height: 38px;
-    padding: 10px 11px 10px 12px;
-    font-size: 11px;
-    letter-spacing: 0.1em;
+    padding: 0;
+  }
+
+  .share-header-text {
+    display: none;
   }
 
   .share-header-icon {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
   }
 
   .nav {

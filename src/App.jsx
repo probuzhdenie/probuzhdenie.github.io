@@ -145,8 +145,13 @@ function ShareButton({ onBeforeShare }) {
         </span>
       )}
 
-      <button className="share-header" type="button" onClick={onClick}>
-        Поделиться
+      <button
+        className="share-header"
+        type="button"
+        onClick={onClick}
+        aria-label="Поделиться"
+      >
+        <span className="share-header-text">Поделиться</span>
         <svg className="share-header-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 15V3m0 0L8 7m4-4 4 4M5 13v6h14v-6" />
         </svg>
