@@ -113,16 +113,21 @@ function verifyTurnstile_(token) {
     if (!secret) return { ok: false, reason: "secret", detail: "empty" };
     const response = UrlFetchApp.fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "post",
-      contentType: "application/x-www-form-urlencoded",
-      payload: "secret=" + encodeURIComponent(secret) + "&response=" + encodeURIComponent(token),
+      payload: {
+        secret: secret,
+        response: token,
+      },
       muteHttpExceptions: true,
     });
-    if (response.getResponseCode() !== 200) {
+    let data = null;
+    try {
+      data = JSON.parse(response.getContentText() || "");
+    } catch (parseError) {
       return { ok: false, reason: "captcha", detail: "http " + response.getResponseCode() };
     }
-    const data = JSON.parse(response.getContentText());
     if (!data || data.success !== true) {
-      const codes = data && data["error-codes"] ? data["error-codes"].join(" ") : "no-codes";
+      const rawCodes = data && data["error-codes"];
+      const codes = Array.isArray(rawCodes) ? rawCodes.join(" ") : "no-codes";
       const reason =
         codes.indexOf("invalid-input-secret") !== -1 || codes.indexOf("missing-input-secret") !== -1
           ? "secret"
@@ -137,7 +142,10 @@ function verifyTurnstile_(token) {
     }
     return { ok: true };
   } catch (error) {
-    return { ok: false, reason: "captcha", detail: "exception" };
+    const message = String(error && error.message ? error.message : error)
+      .replace(/0x[0-9A-Za-z_-]{8,}/g, "secret")
+      .slice(0, 160);
+    return { ok: false, reason: "captcha", detail: message || "exception" };
   }
 }
 
