@@ -1042,12 +1042,6 @@ blockquote cite {
   margin-bottom: 12px;
 }
 
-.turnstile {
-  width: 100%;
-  min-height: 65px;
-  margin: 2px 0 14px;
-}
-
 .card label.hp-field {
   position: absolute;
   width: 1px;

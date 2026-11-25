@@ -7,15 +7,7 @@ const SUBJECTS = {
 const TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
 const MIN_AGE_MS = 3000;
 const DEVICE_DAILY_LIMIT = 5;
-const TURNSTILE_ACTION = "note";
-const TURNSTILE_HOSTS = {
-  "probuzhdenie.github.io": true,
-  localhost: true,
-  "127.0.0.1": true,
-};
 
-// Секрет виджета Cloudflare Turnstile — свойство скрипта TURNSTILE_SECRET.
-// Ключ сайта — VITE_TURNSTILE_SITE_KEY. Без секрета письма не уходят.
 // После правки: Развёртывания → изменить → новая версия. Иначе сайт продолжит вызывать старый код.
 
 function issueToken_() {
@@ -64,8 +56,6 @@ function doPost(e) {
     const token = readToken_(data.token);
     if (!token) return json({ ok: false, reason: "bad" });
     if (token.early) return json({ ok: false, reason: "soon" });
-    const verdict = verifyTurnstile_(data.turnstile);
-    if (!verdict.ok) return json({ ok: false, reason: verdict.reason, detail: verdict.detail });
 
     const gate = takeSlot_(token, data.device);
     if (gate !== "ok") return json({ ok: false, reason: gate });
@@ -100,59 +90,6 @@ function replyEmail_(value) {
   if (!/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(domain)) return "";
   if (domain.charAt(0) === "." || domain.charAt(0) === "-") return "";
   return email;
-}
-
-// Диагностика: запустите в редакторе, чтобы увидеть точную причину ошибки проверки
-// и заодно подтвердить доступ UrlFetchApp. Письмо при этом не отправляется.
-function probeTurnstile_() {
-  Logger.log(JSON.stringify(verifyTurnstile_("fake-turnstile-token-000000")));
-}
-
-function verifyTurnstile_(token) {
-  try {
-    if (typeof token !== "string" || token.length < 10 || token.length > 4096) {
-      return { ok: false, reason: "captcha", detail: "token" };
-    }
-    const secret = String(
-      PropertiesService.getScriptProperties().getProperty("TURNSTILE_SECRET") || "",
-    ).trim();
-    if (!secret) return { ok: false, reason: "secret", detail: "empty" };
-    const response = UrlFetchApp.fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "post",
-      payload: {
-        secret: secret,
-        response: token,
-      },
-      muteHttpExceptions: true,
-    });
-    let data = null;
-    try {
-      data = JSON.parse(response.getContentText() || "");
-    } catch (parseError) {
-      return { ok: false, reason: "captcha", detail: "http " + response.getResponseCode() };
-    }
-    if (!data || data.success !== true) {
-      const rawCodes = data && data["error-codes"];
-      const codes = Array.isArray(rawCodes) ? rawCodes.join(" ") : "no-codes";
-      const reason =
-        codes.indexOf("invalid-input-secret") !== -1 || codes.indexOf("missing-input-secret") !== -1
-          ? "secret"
-          : "captcha";
-      return { ok: false, reason: reason, detail: codes };
-    }
-    const host = String(data.hostname || "").toLowerCase();
-    if (!TURNSTILE_HOSTS[host]) return { ok: false, reason: "captcha", detail: "host " + host };
-    const action = String(data.action || "");
-    if (action && action !== TURNSTILE_ACTION) {
-      return { ok: false, reason: "captcha", detail: "action " + action };
-    }
-    return { ok: true };
-  } catch (error) {
-    const message = String(error && error.message ? error.message : error)
-      .replace(/0x[0-9A-Za-z_-]{8,}/g, "secret")
-      .slice(0, 160);
-    return { ok: false, reason: "captcha", detail: message || "exception" };
-  }
 }
 
 function secret_() {

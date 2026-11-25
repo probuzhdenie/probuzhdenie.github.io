@@ -23,7 +23,6 @@ const MAP_URL =
   "https://yandex.ru/maps/?ll=44.741985%2C48.803119&z=17&pt=44.741985%2C48.803119%2Cpm2rdm&mode=whatshere&whatshere%5Bpoint%5D=44.741985%2C48.803119&whatshere%5Bzoom%5D=17";
 
 const SCRIPT_URL = import.meta.env.VITE_GAS_URL;
-const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || "";
 const MIN_NOTE_AGE_MS = 3000;
 const NOTE_KINDS = [
   { id: "pastor", label: "Обращение к пастору" },
@@ -75,7 +74,7 @@ function deviceId() {
   return sessionDeviceId;
 }
 
-async function sendNote(name, contact, message, kind, fax, token, turnstile) {
+async function sendNote(name, contact, message, kind, fax, token) {
   if (!SCRIPT_URL) throw new Error("send failed");
   const response = await fetch(SCRIPT_URL, {
     method: "POST",
@@ -87,7 +86,6 @@ async function sendNote(name, contact, message, kind, fax, token, turnstile) {
       kind,
       fax,
       token,
-      turnstile,
       device: deviceId(),
     }),
   });
@@ -96,70 +94,6 @@ async function sendNote(name, contact, message, kind, fax, token, turnstile) {
   const error = new Error("send failed");
   error.reason = data?.reason || "bad";
   throw error;
-}
-
-function loadTurnstile() {
-  if (window.turnstile) return Promise.resolve();
-  if (!loadTurnstile.promise) {
-    loadTurnstile.promise = new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => {
-        loadTurnstile.promise = null;
-        reject(new Error("turnstile"));
-      };
-      document.head.appendChild(script);
-    });
-  }
-  return loadTurnstile.promise;
-}
-
-function TurnstileField({ apiRef }) {
-  const boxRef = useRef(null);
-
-  useEffect(() => {
-    if (!TURNSTILE_SITE_KEY) return undefined;
-    let cancelled = false;
-    let widgetId;
-
-    loadTurnstile()
-      .then(() => {
-        if (cancelled || !boxRef.current || !window.turnstile) return;
-        widgetId = window.turnstile.render(boxRef.current, {
-          sitekey: TURNSTILE_SITE_KEY,
-          action: "note",
-          theme: "light",
-          language: "ru",
-          size: "flexible",
-          callback(token) {
-            apiRef.current.token = token || "";
-          },
-          "expired-callback"() {
-            apiRef.current.token = "";
-          },
-          "error-callback"() {
-            apiRef.current.token = "";
-          },
-        });
-        apiRef.current.reset = () => {
-          apiRef.current.token = "";
-          if (widgetId != null && window.turnstile) window.turnstile.reset(widgetId);
-        };
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-      apiRef.current.token = "";
-      apiRef.current.reset = () => {};
-      if (widgetId != null && window.turnstile) window.turnstile.remove(widgetId);
-    };
-  }, [apiRef]);
-
-  if (!TURNSTILE_SITE_KEY) return null;
-  return <div className="turnstile" ref={boxRef} />;
 }
 
 function CrossMark({ className }) {
@@ -889,7 +823,6 @@ export default function App() {
   const [formState, setFormState] = useState("idle");
   const openedRef = useRef(Date.now());
   const tokenRef = useRef("");
-  const captchaRef = useRef({ token: "", reset() {} });
   useReveal();
   useFooterScroll();
 
@@ -946,11 +879,6 @@ export default function App() {
       setFormState("wait");
       return;
     }
-    const turnstile = captchaRef.current.token;
-    if (!TURNSTILE_SITE_KEY || !turnstile) {
-      setFormState("captcha");
-      return;
-    }
     setFormState("sending");
     try {
       let token = tokenRef.current;
@@ -962,26 +890,17 @@ export default function App() {
           token = "";
         }
       }
-      await sendNote(name, contact, message, kind, fax, token, turnstile);
+      await sendNote(name, contact, message, kind, fax, token);
       form.reset();
       setFormState("sent");
     } catch (error) {
       if (error?.reason === "soon") {
         setFormState("wait");
       } else if (error?.reason === "rate") {
-        captchaRef.current.reset();
         setFormState("limited");
       } else if (error?.reason === "device") {
-        captchaRef.current.reset();
         setFormState("device");
-      } else if (error?.reason === "captcha") {
-        captchaRef.current.reset();
-        setFormState("captcha");
-      } else if (error?.reason === "secret") {
-        captchaRef.current.reset();
-        setFormState("secret");
       } else {
-        captchaRef.current.reset();
         tokenRef.current = "";
         requestToken()
           .then((token) => {
@@ -1288,30 +1207,10 @@ export default function App() {
                   <span>Факс</span>
                   <input name="fax" tabIndex={-1} autoComplete="off" defaultValue="" />
                 </label>
-                <TurnstileField apiRef={captchaRef} />
-                {!TURNSTILE_SITE_KEY && (
-                  <p className="form-note is-error">
-                    Отправка с сайта временно недоступна. Напишите на почту храма.
-                  </p>
-                )}
                 <div className="form-actions">
-                  <button
-                    className="gold-button"
-                    type="submit"
-                    disabled={formState === "sending" || !TURNSTILE_SITE_KEY}
-                  >
+                  <button className="gold-button" type="submit" disabled={formState === "sending"}>
                     {formState === "sending" ? "Отправляем…" : "Отправить"}
                   </button>
-                  {formState === "captcha" && (
-                    <p className="form-note is-error">
-                      Проверка не принята сервером. Отправьте ещё раз.
-                    </p>
-                  )}
-                  {formState === "secret" && (
-                    <p className="form-note is-error">
-                      Скрипт почты не принял секретный ключ Cloudflare.
-                    </p>
-                  )}
                   {formState === "wait" && (
                     <p className="form-note is-error">
                       Подождите несколько секунд и отправьте ещё раз.
