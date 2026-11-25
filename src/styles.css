@@ -43,7 +43,8 @@ a {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -161,12 +162,127 @@ p {
   cursor: pointer;
 }
 
+.share-header-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.share-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 11px 14px 11px 18px;
+  border: 0;
+  background: #000;
+  color: var(--gold-bright);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.share-header-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.share-header:hover {
+  background: rgba(0, 0, 0, 0.78);
+}
+
+.share-header:focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 2px;
+}
+
+.share-done {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: #34c759;
+  animation: share-check-in 0.18s ease-out;
+}
+
+.share-done svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes share-check-in {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-done {
+    animation: none;
+  }
+}
+
+.share-error {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #d98b7e;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.share-error svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.share-fallback {
+  width: min(240px, calc(100vw - 64px));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
 .nav a:hover,
 .nav-paper:hover {
   color: var(--gold-bright);
 }
 
-.nav-button,
 .gold-button {
   display: inline-flex;
   align-items: center;
@@ -181,13 +297,6 @@ p {
   cursor: pointer;
 }
 
-.nav-button {
-  min-height: 40px;
-  padding: 11px 18px;
-  font-size: 12px;
-}
-
-.nav-button:hover,
 .gold-button:hover {
   filter: brightness(1.05);
 }
@@ -851,13 +960,18 @@ blockquote cite {
 
 .contact-blocks {
   grid-area: info;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
   max-width: 460px;
   margin-top: 28px;
 }
 
 .card {
   grid-area: form;
-  align-self: start;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
   margin-top: 14px;
   padding: 28px 28px 32px;
   background: rgba(255, 255, 255, 0.58);
@@ -911,13 +1025,32 @@ blockquote cite {
 }
 
 .card input,
-.card textarea {
+.card textarea,
+.card select {
   width: 100%;
   padding: 14px 16px;
   border: 0;
   background: #f6f3ec;
   color: var(--ink);
   resize: vertical;
+}
+
+.card select {
+  padding-right: 40px;
+  background-color: #f6f3ec;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23c9a24b' stroke-width='1.6' d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  cursor: pointer;
+  appearance: none;
+}
+
+.card select:invalid {
+  color: #9a9388;
+}
+
+.card select option {
+  color: var(--ink);
 }
 
 .card input::placeholder,
@@ -927,6 +1060,7 @@ blockquote cite {
 
 .card input:focus,
 .card textarea:focus,
+.card select:focus,
 .nav a:focus-visible,
 .nav-paper:focus-visible,
 .gold-button:focus-visible,
@@ -940,6 +1074,21 @@ blockquote cite {
   margin-top: 6px;
   padding: 14px 28px;
   font-size: 13px;
+}
+
+.form-actions {
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.form-actions .gold-button {
+  margin-top: 0;
+}
+
+.contact-blocks > .map-button {
+  align-self: flex-start;
+  margin-top: 18px;
+  margin-bottom: 32px;
 }
 
 .gold-button:disabled {
@@ -1287,6 +1436,16 @@ blockquote cite {
     row-gap: 8px;
   }
 
+  .contact-blocks {
+    display: block;
+    align-self: auto;
+  }
+
+  .contact-blocks > .map-button {
+    margin-top: 28px;
+    margin-bottom: 0;
+  }
+
   .card {
     margin-top: 18px;
   }
@@ -1356,6 +1515,19 @@ blockquote cite {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .share-header {
+    gap: 7px;
+    min-height: 38px;
+    padding: 10px 11px 10px 12px;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+
+  .share-header-icon {
+    width: 14px;
+    height: 14px;
   }
 
   .nav {

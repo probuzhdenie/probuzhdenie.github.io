@@ -1,5 +1,9 @@
 const MAIL_TO = "k253vo@mail.ru";
-const SUBJECT = "Сообщение/записка с сайта Probuzhdenie-visit";
+// Темы писем — по ним фильтруют почту.
+const SUBJECTS = {
+  pastor: "Обращение к пастору с сайта Probuzhdenie-visit",
+  prayer: "Молитвенная записка с сайта Probuzhdenie-visit",
+};
 const TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
 const MIN_AGE_MS = 3000;
 const BURST_LIMIT = 8;
@@ -36,7 +40,9 @@ function doPost(e) {
     const name = String(data.name || "").trim();
     const contact = String(data.contact || "").trim();
     const message = String(data.message || "").trim();
+    const subject = SUBJECTS[String(data.kind || "").trim()];
     if (
+      !subject ||
       !name ||
       !message ||
       name.length > 200 ||
@@ -60,7 +66,7 @@ function doPost(e) {
     if (contact) lines.push("Телефон или почта: " + contact);
     const letter = {
       to: MAIL_TO,
-      subject: SUBJECT,
+      subject: subject,
       body: lines.join("\n"),
     };
     if (contact.indexOf("@") !== -1) letter.replyTo = contact;

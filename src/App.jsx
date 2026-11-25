@@ -23,6 +23,10 @@ const MAP_URL =
 
 const SCRIPT_URL = import.meta.env.VITE_GAS_URL;
 const MIN_NOTE_AGE_MS = 3000;
+const NOTE_KINDS = [
+  { id: "pastor", label: "Обращение к пастору" },
+  { id: "prayer", label: "Молитвенная записка" },
+];
 
 async function requestToken() {
   if (!SCRIPT_URL) throw new Error("send failed");
@@ -36,12 +40,12 @@ async function requestToken() {
   return data.token;
 }
 
-async function sendNote(name, contact, message, fax, token) {
+async function sendNote(name, contact, message, kind, fax, token) {
   if (!SCRIPT_URL) throw new Error("send failed");
   const response = await fetch(SCRIPT_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ name, contact, message, fax, token }),
+    body: JSON.stringify({ name, contact, message, kind, fax, token }),
   });
   const data = await response.json().catch(() => null);
   if (response.ok && data?.ok) return;
@@ -55,6 +59,114 @@ function CrossMark({ className }) {
     <svg className={className} viewBox="0 0 20 32" aria-hidden="true">
       <path d="M10 1v30M6 6.2h8M1.6 12.2h16.8M4.6 22h10.8" />
     </svg>
+  );
+}
+
+const SHARE_TITLE = "Храм Свет Евангелия в Волжском";
+const SHARE_TEXT =
+  "Богослужение каждое воскресенье в 10:00. г. Волжский, ул. Комсомольская, 22а";
+
+function getShareUrl() {
+  const canonical = document.querySelector('link[rel="canonical"]')?.href;
+  return canonical || window.location.href.split("#")[0];
+}
+
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // пробуем fallback ниже
+    }
+  }
+
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.cssText = "position:fixed;top:-1000px;opacity:0";
+  document.body.appendChild(area);
+  area.select();
+  area.setSelectionRange(0, area.value.length);
+
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  area.remove();
+  return ok;
+}
+
+function ShareButton({ onBeforeShare }) {
+  const [status, setStatus] = useState("idle");
+  const [url, setUrl] = useState("");
+  const timerRef = useRef(0);
+
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+
+  function announce(next) {
+    setStatus(next);
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setStatus("idle"), 2600);
+  }
+
+  async function onClick() {
+    onBeforeShare?.();
+    window.clearTimeout(timerRef.current);
+    setStatus("idle");
+
+    const shareUrl = getShareUrl();
+
+    if (navigator.share) {
+      try {
+        // Вызываем сразу в обработчике клика: так сохраняется жест пользователя.
+        // Успех системного окна никак не подсвечиваем — сайт не знает, что произошло дальше.
+        await navigator.share({ title: SHARE_TITLE, text: SHARE_TEXT, url: shareUrl });
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+      }
+    }
+
+    setUrl(shareUrl);
+    const ok = await copyText(shareUrl);
+    announce(ok ? "copied" : "error");
+  }
+
+  return (
+    <div className="share-header-wrap">
+      {status === "copied" && (
+        <span className="share-done" role="status" aria-label="Ссылка скопирована">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M4 10.6 8.1 14.7 16 6.6" />
+          </svg>
+        </span>
+      )}
+
+      <button className="share-header" type="button" onClick={onClick}>
+        Поделиться
+        <svg className="share-header-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 15V3m0 0L8 7m4-4 4 4M5 13v6h14v-6" />
+        </svg>
+      </button>
+
+      {status === "error" && (
+        <div className="share-error" role="status">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M5 5 15 15M15 5 5 15" />
+          </svg>
+          <input
+            className="share-fallback"
+            readOnly
+            value={url}
+            onFocus={(event) => event.target.select()}
+            aria-label="Адрес сайта для копирования"
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -639,10 +751,11 @@ export default function App() {
     const name = form.name.value.trim();
     const contact = form.contact.value.trim();
     const message = form.message.value.trim();
+    const kind = form.kind.value;
     const fax = form.fax.value.trim();
-    if (!name || !message) {
+    if (!NOTE_KINDS.some((item) => item.id === kind) || !name || !message) {
       if (!name) form.name.value = "";
-      else form.message.value = "";
+      if (!message) form.message.value = "";
       form.reportValidity();
       return;
     }
@@ -666,7 +779,7 @@ export default function App() {
           token = "";
         }
       }
-      await sendNote(name, contact, message, fax, token);
+      await sendNote(name, contact, message, kind, fax, token);
       form.reset();
       setFormState("sent");
     } catch (error) {
@@ -730,16 +843,8 @@ export default function App() {
               <a href="#contacts" onClick={closeMenu}>
                 Контакты
               </a>
-              <a
-                className="nav-button"
-                href={MAP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={closeMenu}
-              >
-                Как нас найти
-              </a>
             </nav>
+            <ShareButton onBeforeShare={closeMenu} />
           </div>
         </header>
 
@@ -919,6 +1024,14 @@ export default function App() {
               <p className="contact-label">Храм открыт</p>
               <p>Ежедневно с 9:00–20:00</p>
             </div>
+            <a
+              className="gold-button map-button"
+              href={MAP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Как нас найти
+            </a>
           </div>
           <form className="card" id="write" onSubmit={onSubmit}>
             <h2>Написать в храм</h2>
@@ -929,6 +1042,19 @@ export default function App() {
               </div>
             ) : (
               <>
+                <label>
+                  <span className="sr">Вид сообщения</span>
+                  <select name="kind" defaultValue="" required>
+                    <option value="" disabled>
+                      Вид сообщения
+                    </option>
+                    {NOTE_KINDS.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label>
                   <span className="sr">Ваше имя</span>
                   <input
@@ -959,28 +1085,30 @@ export default function App() {
                   <span>Факс</span>
                   <input name="fax" tabIndex={-1} autoComplete="off" defaultValue="" />
                 </label>
-                <button
-                  className="gold-button"
-                  type="submit"
-                  disabled={formState === "sending"}
-                >
-                  {formState === "sending" ? "Отправляем…" : "Отправить"}
-                </button>
-                {formState === "wait" && (
-                  <p className="form-note is-error">
-                    Подождите несколько секунд и отправьте ещё раз.
-                  </p>
-                )}
-                {formState === "limited" && (
-                  <p className="form-note is-error">
-                    Сейчас много сообщений. Напишите чуть позже.
-                  </p>
-                )}
-                {formState === "error" && (
-                  <p className="form-note is-error">
-                    Не удалось отправить. Попробуйте ещё раз.
-                  </p>
-                )}
+                <div className="form-actions">
+                  <button
+                    className="gold-button"
+                    type="submit"
+                    disabled={formState === "sending"}
+                  >
+                    {formState === "sending" ? "Отправляем…" : "Отправить"}
+                  </button>
+                  {formState === "wait" && (
+                    <p className="form-note is-error">
+                      Подождите несколько секунд и отправьте ещё раз.
+                    </p>
+                  )}
+                  {formState === "limited" && (
+                    <p className="form-note is-error">
+                      Сейчас много сообщений. Напишите чуть позже.
+                    </p>
+                  )}
+                  {formState === "error" && (
+                    <p className="form-note is-error">
+                      Не удалось отправить. Попробуйте ещё раз.
+                    </p>
+                  )}
+                </div>
               </>
             )}
           </form>
