@@ -525,6 +525,53 @@ function Ornament() {
   );
 }
 
+function useFooterScroll() {
+  useEffect(() => {
+    const query = window.matchMedia(
+      "(orientation: landscape) and (min-width: 761px) and (max-height: 1024px)",
+    );
+    const footer = document.querySelector(".footer");
+    if (!footer) return undefined;
+    const root = document.documentElement;
+    const screens = [...document.querySelectorAll(".screen:not(.footer)")];
+    let holding = false;
+    let frame = 0;
+
+    const apply = () => {
+      if (!query.matches) {
+        holding = false;
+        root.style.scrollSnapType = "";
+        return;
+      }
+      const top = footer.getBoundingClientRect().top;
+      const height = window.innerHeight;
+      const aligned = screens.some(
+        (screen) => Math.abs(screen.getBoundingClientRect().top) <= 3,
+      );
+      if (!holding && top < height - 1) holding = true;
+      else if (holding && top >= height - 1 && aligned) holding = false;
+      root.style.scrollSnapType = holding ? "none" : "";
+    };
+
+    const onChange = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(apply);
+    };
+
+    apply();
+    window.addEventListener("scroll", onChange, { passive: true });
+    window.addEventListener("resize", onChange);
+    query.addEventListener("change", onChange);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onChange);
+      window.removeEventListener("resize", onChange);
+      query.removeEventListener("change", onChange);
+      root.style.scrollSnapType = "";
+    };
+  }, []);
+}
+
 function useReveal() {
   useEffect(() => {
     const nodes = Array.from(document.querySelectorAll("[data-reveal]"));
@@ -736,6 +783,7 @@ export default function App() {
   const openedRef = useRef(Date.now());
   const tokenRef = useRef("");
   useReveal();
+  useFooterScroll();
 
   useEffect(() => {
     let cancel = false;

@@ -1173,9 +1173,8 @@ blockquote cite {
   padding-bottom: 28px;
   background: #000;
   color: #fff;
-  /* Shorter than the viewport, so aligning its top is unreachable
-     and the page oscillates at the bottom. Align the footer's end
-     with the end of the screen instead — that is the real page end. */
+  /* The footer is shorter than the screen, so snapping its top
+     can never be reached. Snap its bottom to the end of the page. */
   scroll-snap-align: end;
 }
 
@@ -1760,6 +1759,10 @@ blockquote cite {
     height: 100svh;
     min-height: max(640px, 100vh);
     min-height: max(640px, 100svh);
+  }
+
+  .footer {
+    scroll-snap-align: none;
   }
 }
 
