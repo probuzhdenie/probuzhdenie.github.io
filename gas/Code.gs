@@ -6,10 +6,16 @@ const SUBJECTS = {
 };
 const TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
 const MIN_AGE_MS = 3000;
-const BURST_LIMIT = 8;
-const BURST_WINDOW_SEC = 600;
-const DAILY_LIMIT = 40;
+const DEVICE_DAILY_LIMIT = 5;
+const TURNSTILE_ACTION = "note";
+const TURNSTILE_HOSTS = {
+  "probuzhdenie.github.io": true,
+  localhost: true,
+  "127.0.0.1": true,
+};
 
+// Секрет виджета Cloudflare Turnstile — свойство скрипта TURNSTILE_SECRET.
+// Ключ сайта — VITE_TURNSTILE_SITE_KEY. Без секрета письма не уходят.
 // После правки: Развёртывания → изменить → новая версия. Иначе сайт продолжит вызывать старый код.
 
 function issueToken_() {
@@ -32,7 +38,7 @@ function doGet() {
 function doPost(e) {
   try {
     const raw = e && e.postData && e.postData.contents;
-    if (!raw || raw.length > 8000) return json({ ok: false, reason: "bad" });
+    if (!raw || raw.length > 20000) return json({ ok: false, reason: "bad" });
     const data = JSON.parse(raw);
     if (data.issue === "token") return json({ ok: true, token: issueToken_() });
     if (String(data.fax || "").trim()) return json({ ok: true });
@@ -58,8 +64,9 @@ function doPost(e) {
     const token = readToken_(data.token);
     if (!token) return json({ ok: false, reason: "bad" });
     if (token.early) return json({ ok: false, reason: "soon" });
+    if (!verifyTurnstile_(data.turnstile)) return json({ ok: false, reason: "captcha" });
 
-    const gate = takeSlot_(token);
+    const gate = takeSlot_(token, data.device);
     if (gate !== "ok") return json({ ok: false, reason: gate });
 
     const lines = [message, "", "Имя: " + name];
@@ -69,11 +76,52 @@ function doPost(e) {
       subject: subject,
       body: lines.join("\n"),
     };
-    if (contact.indexOf("@") !== -1) letter.replyTo = contact;
+    const replyTo = replyEmail_(contact);
+    if (replyTo) letter.replyTo = replyTo;
     MailApp.sendEmail(letter);
     return json({ ok: true });
   } catch (error) {
     return json({ ok: false, reason: "bad" });
+  }
+}
+
+function replyEmail_(value) {
+  const email = String(value || "");
+  if (!email || email.length > 200) return "";
+  if (/[\s,;<>()"\[\]\\]/.test(email)) return "";
+  const at = email.indexOf("@");
+  if (at < 1 || email.indexOf("@", at + 1) !== -1) return "";
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (local.length > 64 || domain.length > 190) return "";
+  if (local.indexOf("..") !== -1 || domain.indexOf("..") !== -1) return "";
+  if (!/^[A-Za-z0-9._%+-]+$/.test(local)) return "";
+  if (!/^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(domain)) return "";
+  if (domain.charAt(0) === "." || domain.charAt(0) === "-") return "";
+  return email;
+}
+
+function verifyTurnstile_(token) {
+  try {
+    if (typeof token !== "string" || token.length < 10 || token.length > 2048) return false;
+    const secret = PropertiesService.getScriptProperties().getProperty("TURNSTILE_SECRET");
+    if (!secret) return false;
+    const response = UrlFetchApp.fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "post",
+      payload: {
+        secret: secret,
+        response: token,
+      },
+      muteHttpExceptions: true,
+    });
+    if (response.getResponseCode() !== 200) return false;
+    const data = JSON.parse(response.getContentText());
+    if (!data || data.success !== true) return false;
+    if (!TURNSTILE_HOSTS[String(data.hostname || "")]) return false;
+    if (data.action !== TURNSTILE_ACTION) return false;
+    return true;
+  } catch (error) {
+    return false;
   }
 }
 
@@ -125,7 +173,13 @@ function readToken_(token) {
   return payload;
 }
 
-function takeSlot_(token) {
+function deviceKey_(value) {
+  const id = String(value || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) return "";
+  return id;
+}
+
+function takeSlot_(token, deviceId) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(8000)) return "rate";
   try {
@@ -133,10 +187,9 @@ function takeSlot_(token) {
     const cache = CacheService.getScriptCache();
     const nonceKey = "n:" + token.nonce;
     if (cache.get(nonceKey)) return "bad";
-    const now = Date.now();
-    if (!rememberBurst_(cache, now)) return "rate";
-    if (!rememberDay_(now)) return "rate";
-    const ttl = Math.max(1, Math.min(21600, Math.ceil((token.exp - now) / 1000)));
+    const gate = rememberDevice_(Date.now(), deviceId);
+    if (gate !== "ok") return gate;
+    const ttl = Math.max(1, Math.min(21600, Math.ceil((token.exp - Date.now()) / 1000)));
     cache.put(nonceKey, "1", ttl);
     return "ok";
   } finally {
@@ -144,40 +197,23 @@ function takeSlot_(token) {
   }
 }
 
-function rememberBurst_(cache, now) {
-  const windowMs = BURST_WINDOW_SEC * 1000;
-  const raw = cache.get("burst");
-  let count = 0;
-  let start = now;
-  if (raw) {
-    const parts = String(raw).split(":");
-    const savedCount = Number(parts[0]);
-    const savedStart = Number(parts[1]);
-    if (savedStart && now - savedStart < windowMs) {
-      count = savedCount;
-      start = savedStart;
-    }
-  }
-  if (count >= BURST_LIMIT) return false;
-  const ttl = Math.max(1, Math.ceil((start + windowMs - now) / 1000));
-  cache.put("burst", count + 1 + ":" + start, ttl);
-  return true;
-}
-
-function rememberDay_(now) {
+function rememberDevice_(now, rawId) {
+  const id = deviceKey_(rawId);
+  if (!id) return "bad";
   const props = PropertiesService.getScriptProperties();
   const day = Utilities.formatDate(new Date(now), "Europe/Moscow", "yyyy-MM-dd");
-  const key = "sent:" + day;
-  const count = Number(props.getProperty(key) || "0");
-  if (count >= DAILY_LIMIT) return false;
-  const stale = Object.keys(props.getProperties()).filter(function (name) {
-    return name.indexOf("sent:") === 0 && name !== key;
-  });
-  stale.forEach(function (name) {
-    props.deleteProperty(name);
+  const prefix = "dev:" + day + ":";
+  const key = prefix + id;
+  const all = props.getProperties();
+  const count = Number(all[key] || "0");
+  if (count >= DEVICE_DAILY_LIMIT) return "device";
+  Object.keys(all).forEach(function (name) {
+    const oldDevice = name.indexOf("dev:") === 0 && name.indexOf(prefix) !== 0;
+    const oldTotal = name.indexOf("sent:") === 0;
+    if (oldDevice || oldTotal) props.deleteProperty(name);
   });
   props.setProperty(key, String(count + 1));
-  return true;
+  return "ok";
 }
 
 function safeEqual_(left, right) {
