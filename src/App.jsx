@@ -977,6 +977,9 @@ export default function App() {
       } else if (error?.reason === "captcha") {
         captchaRef.current.reset();
         setFormState("captcha");
+      } else if (error?.reason === "secret") {
+        captchaRef.current.reset();
+        setFormState("secret");
       } else {
         captchaRef.current.reset();
         tokenRef.current = "";
@@ -1301,7 +1304,12 @@ export default function App() {
                   </button>
                   {formState === "captcha" && (
                     <p className="form-note is-error">
-                      Подтвердите, что вы человек, и отправьте ещё раз.
+                      Проверка не принята сервером. Отправьте ещё раз.
+                    </p>
+                  )}
+                  {formState === "secret" && (
+                    <p className="form-note is-error">
+                      Скрипт почты не принял секретный ключ Cloudflare.
                     </p>
                   )}
                   {formState === "wait" && (

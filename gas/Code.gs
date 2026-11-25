@@ -64,7 +64,8 @@ function doPost(e) {
     const token = readToken_(data.token);
     if (!token) return json({ ok: false, reason: "bad" });
     if (token.early) return json({ ok: false, reason: "soon" });
-    if (!verifyTurnstile_(data.turnstile)) return json({ ok: false, reason: "captcha" });
+    const verdict = verifyTurnstile_(data.turnstile);
+    if (!verdict.ok) return json({ ok: false, reason: verdict.reason, detail: verdict.detail });
 
     const gate = takeSlot_(token, data.device);
     if (gate !== "ok") return json({ ok: false, reason: gate });
@@ -103,25 +104,40 @@ function replyEmail_(value) {
 
 function verifyTurnstile_(token) {
   try {
-    if (typeof token !== "string" || token.length < 10 || token.length > 2048) return false;
-    const secret = PropertiesService.getScriptProperties().getProperty("TURNSTILE_SECRET");
-    if (!secret) return false;
+    if (typeof token !== "string" || token.length < 10 || token.length > 4096) {
+      return { ok: false, reason: "captcha", detail: "token" };
+    }
+    const secret = String(
+      PropertiesService.getScriptProperties().getProperty("TURNSTILE_SECRET") || "",
+    ).trim();
+    if (!secret) return { ok: false, reason: "secret", detail: "empty" };
     const response = UrlFetchApp.fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "post",
-      payload: {
-        secret: secret,
-        response: token,
-      },
+      contentType: "application/x-www-form-urlencoded",
+      payload: "secret=" + encodeURIComponent(secret) + "&response=" + encodeURIComponent(token),
       muteHttpExceptions: true,
     });
-    if (response.getResponseCode() !== 200) return false;
+    if (response.getResponseCode() !== 200) {
+      return { ok: false, reason: "captcha", detail: "http " + response.getResponseCode() };
+    }
     const data = JSON.parse(response.getContentText());
-    if (!data || data.success !== true) return false;
-    if (!TURNSTILE_HOSTS[String(data.hostname || "")]) return false;
-    if (data.action !== TURNSTILE_ACTION) return false;
-    return true;
+    if (!data || data.success !== true) {
+      const codes = data && data["error-codes"] ? data["error-codes"].join(" ") : "no-codes";
+      const reason =
+        codes.indexOf("invalid-input-secret") !== -1 || codes.indexOf("missing-input-secret") !== -1
+          ? "secret"
+          : "captcha";
+      return { ok: false, reason: reason, detail: codes };
+    }
+    const host = String(data.hostname || "").toLowerCase();
+    if (!TURNSTILE_HOSTS[host]) return { ok: false, reason: "captcha", detail: "host " + host };
+    const action = String(data.action || "");
+    if (action && action !== TURNSTILE_ACTION) {
+      return { ok: false, reason: "captcha", detail: "action " + action };
+    }
+    return { ok: true };
   } catch (error) {
-    return false;
+    return { ok: false, reason: "captcha", detail: "exception" };
   }
 }
 
