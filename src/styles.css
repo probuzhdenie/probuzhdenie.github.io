@@ -1748,9 +1748,17 @@ blockquote cite {
 
   .screen,
   .links {
-    width: min(1240px, 65vw);
+    /* 65vw on a laptop (about 1400–1700px) is narrower than the header.
+       The hero clips overflow, so the share icon is cut off.
+       1200px keeps brand, nav, and the share icon on one line. */
+    width: clamp(1200px, 65vw, 1240px);
     margin-left: auto;
     margin-right: auto;
+  }
+
+  .nav a,
+  .nav-paper {
+    white-space: nowrap;
   }
 
   .wrap,
