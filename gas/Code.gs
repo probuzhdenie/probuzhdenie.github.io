@@ -102,6 +102,12 @@ function replyEmail_(value) {
   return email;
 }
 
+// Диагностика: запустите в редакторе, чтобы увидеть точную причину ошибки проверки
+// и заодно подтвердить доступ UrlFetchApp. Письмо при этом не отправляется.
+function probeTurnstile_() {
+  Logger.log(JSON.stringify(verifyTurnstile_("fake-turnstile-token-000000")));
+}
+
 function verifyTurnstile_(token) {
   try {
     if (typeof token !== "string" || token.length < 10 || token.length > 4096) {
