@@ -176,8 +176,8 @@ p {
   gap: 10px;
   min-height: 40px;
   padding: 11px 14px 11px 18px;
-  border: 0;
-  background: #000;
+  border: none;
+  background: transparent;
   color: var(--gold-bright);
   font-size: 12px;
   font-weight: 700;
@@ -188,8 +188,8 @@ p {
 }
 
 .share-header-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex: none;
   fill: none;
   stroke: currentColor;
@@ -927,6 +927,31 @@ blockquote cite {
   line-height: 1.45;
 }
 
+.visit-verse {
+  max-width: 760px;
+  margin: 40px auto 0;
+  text-align: center;
+}
+
+.visit-verse-text {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.7);
+  font-family: "PT Serif", Georgia, serif;
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.6;
+}
+
+.visit-verse-ref {
+  margin-top: 12px;
+  color: var(--gold);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
 .contacts-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
@@ -1427,6 +1452,14 @@ blockquote cite {
     grid-template-columns: 1fr;
   }
 
+  .visit-verse {
+    margin-top: 32px;
+  }
+
+  .visit-verse-text {
+    font-size: 15px;
+  }
+
   .contacts-grid {
     grid-template-areas:
       "kicker"
@@ -1530,8 +1563,8 @@ blockquote cite {
   }
 
   .share-header-icon {
-    width: 16px;
-    height: 16px;
+    width: 32px;
+    height: 32px;
   }
 
   .nav {

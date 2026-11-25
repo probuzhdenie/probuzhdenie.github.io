@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import galleryFiles from "virtual:gallery";
+import verses from "./data/verses-list.json";
 
 const pub = (file) => `${import.meta.env.BASE_URL}${file}`;
 
@@ -65,6 +66,22 @@ function CrossMark({ className }) {
 const SHARE_TITLE = "Храм Свет Евангелия в Волжском";
 const SHARE_TEXT =
   "Богослужение каждое воскресенье в 10:00. г. Волжский, ул. Комсомольская, 22а";
+
+function nextVerseIndex() {
+  const key = "verse-index";
+
+  try {
+    const raw = sessionStorage.getItem(key);
+    const saved = raw === null ? NaN : Number(raw);
+    const index = Number.isInteger(saved) ? (saved + 1) % verses.length : 0;
+    sessionStorage.setItem(key, String(index));
+    return index;
+  } catch {
+    return Math.floor(Math.random() * verses.length);
+  }
+}
+
+const VERSE = verses[nextVerseIndex()];
 
 function getShareUrl() {
   const canonical = document.querySelector('link[rel="canonical"]')?.href;
@@ -993,6 +1010,10 @@ export default function App() {
               </li>
             ))}
           </ol>
+          <figure className="visit-verse">
+            <blockquote className="visit-verse-text">{VERSE.text}</blockquote>
+            <figcaption className="visit-verse-ref">— {VERSE.reference}</figcaption>
+          </figure>
         </div>
       </section>
 
